@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useRouter } from 'next/router';
 import Sidebar from '@/components/Layout/Sidebar';
 
 interface TodaySchedule {
@@ -20,6 +21,7 @@ interface NewRequest {
 }
 
 const ExpertDashboard: React.FC = () => {
+  const router = useRouter();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   // 오늘 일정 샘플 데이터
@@ -234,7 +236,11 @@ const ExpertDashboard: React.FC = () => {
                 {todaySchedule.length > 0 ? (
                   <div className="space-y-3">
                     {todaySchedule.map((schedule) => (
-                      <div key={schedule.id} className="flex items-center justify-between p-3 hover:bg-background-50 rounded-lg transition-colors">
+                      <div 
+                        key={schedule.id} 
+                        onClick={() => router.push(`/expert/schedule/detail?id=${schedule.id}`)}
+                        className="flex items-center justify-between p-3 hover:bg-background-50 rounded-lg transition-colors cursor-pointer"
+                      >
                         <div className="flex items-center space-x-3">
                           <div className="text-body font-mono text-secondary-600">
                             {schedule.time}
@@ -257,7 +263,10 @@ const ExpertDashboard: React.FC = () => {
                   </div>
                 )}
                 <div className="mt-4 pt-4 border-t border-background-200">
-                  <button className="w-full text-primary hover:text-primary-600 text-center text-caption font-medium transition-colors">
+                  <button 
+                    onClick={() => router.push('/expert/schedule')}
+                    className="w-full text-primary hover:text-primary-600 text-center text-caption font-medium transition-colors"
+                  >
                     전체 일정 보기 →
                   </button>
                 </div>

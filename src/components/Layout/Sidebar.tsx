@@ -166,6 +166,17 @@ const Sidebar: React.FC<SidebarProps> = ({ userType, isCollapsed = false, onTogg
     );
   };
 
+  const handleMenuClick = async (menu: MenuItem) => {
+    if (menu.children) {
+      // 대시보드 메뉴인 경우 페이지 이동을 우선 처리
+      if (menu.id === 'dashboard') {
+        await router.push(menu.path);
+      }
+      // 토글은 페이지 이동 후 처리
+      toggleMenu(menu.id);
+    }
+  };
+
   const isActive = (path: string) => {
     return router.pathname === path || router.pathname.startsWith(path + '/');
   };
@@ -206,7 +217,7 @@ const Sidebar: React.FC<SidebarProps> = ({ userType, isCollapsed = false, onTogg
               <div>
                 {menu.children ? (
                   <button
-                    onClick={() => toggleMenu(menu.id)}
+                    onClick={() => handleMenuClick(menu)}
                     className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-left
                               transition-all duration-smooth hover:bg-secondary-600 group ${
                                 isActive(menu.path) ? 'bg-secondary-600 text-white' : 'text-secondary-200'
