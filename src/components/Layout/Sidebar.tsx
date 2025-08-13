@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
+import { useStore } from '@/store/useStore';
 
 interface MenuItem {
   id: string;
@@ -19,6 +20,7 @@ interface SidebarProps {
 
 const Sidebar: React.FC<SidebarProps> = ({ userType, isCollapsed = false, onToggleCollapse }) => {
   const router = useRouter();
+  const { logout, isLoading, pendingExpertsCount } = useStore();
   const [expandedMenus, setExpandedMenus] = useState<string[]>(['dashboard']);
 
   // 전문가용 메뉴
@@ -104,8 +106,7 @@ const Sidebar: React.FC<SidebarProps> = ({ userType, isCollapsed = false, onTogg
       icon: '✅',
       path: '/admin/approval',
       children: [
-        { id: 'user-approval', label: '사용자 승인', icon: '👤', path: '/admin/approval/users', badge: 12 },
-        { id: 'expert-approval', label: '전문가 승인', icon: '👨‍⚕️', path: '/admin/approval/experts', badge: 3 }
+        { id: 'expert-approval', label: '전문가 승인', icon: '👨‍⚕️', path: '/admin/approval/experts', badge: pendingExpertsCount > 0 ? pendingExpertsCount : undefined }
       ]
     },
     {
@@ -114,7 +115,7 @@ const Sidebar: React.FC<SidebarProps> = ({ userType, isCollapsed = false, onTogg
       icon: '⚙️',
       path: '/admin/cms',
       children: [
-        { id: 'survey-editor', label: '설문 문항 편집', icon: '📝', path: '/admin/cms/survey' },
+        { id: 'survey-editor', label: '설문 문항 편집', icon: '📝', path: '/admin/cms/questions' },
         { id: 'logic-editor', label: '분기 로직 편집', icon: '🔀', path: '/admin/cms/logic' }
       ]
     },
@@ -182,6 +183,15 @@ const Sidebar: React.FC<SidebarProps> = ({ userType, isCollapsed = false, onTogg
   };
 
   const isMenuExpanded = (menuId: string) => expandedMenus.includes(menuId);
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+      router.push('/login');
+    } catch (error) {
+      console.error('로그아웃 실패:', error);
+    }
+  };
 
   return (
     <div className={`bg-secondary text-white h-screen transition-all duration-smooth ${
@@ -296,28 +306,30 @@ const Sidebar: React.FC<SidebarProps> = ({ userType, isCollapsed = false, onTogg
         </ul>
       </nav>
 
-      {/* 하단 프로필 */}
+      {/* 하단 로그아웃 */}
       <div className="p-4 border-t border-secondary-700">
-        {!isCollapsed ? (
-          <div className="flex items-center space-x-3">
-            <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center flex-shrink-0">
-              <span className="text-white text-sm font-bold">김</span>
+        <button
+          onClick={handleLogout}
+          disabled={isLoading}
+          className={`w-full flex items-center justify-center px-3 py-3 rounded-lg text-white
+                    transition-all duration-smooth border ${
+                      isLoading 
+                        ? 'opacity-50 cursor-not-allowed bg-secondary-600 border-secondary-500' 
+                        : 'hover:bg-secondary-600 bg-secondary-700 border-secondary-500 hover:border-error-400'
+                    }`}
+        >
+          {!isCollapsed && (
+            <div className="flex items-center space-x-2">
+              <span className="text-lg">🚪</span>
+              <span className="text-caption font-medium">
+                {isLoading ? '로그아웃 중...' : '로그아웃'}
+              </span>
             </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-caption font-medium text-white truncate">김상담사</p>
-              <p className="text-xs text-secondary-300 truncate">
-                {userType === 'expert' ? '임상심리사' : '시스템 관리자'}
-              </p>
-            </div>
-            <button className="p-1 hover:bg-secondary-600 rounded transition-colors">
-              <span className="text-secondary-300">⋯</span>
-            </button>
-          </div>
-        ) : (
-          <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center mx-auto">
-            <span className="text-white text-sm font-bold">김</span>
-          </div>
-        )}
+          )}
+          {isCollapsed && (
+            <span className="text-lg">🚪</span>
+          )}
+        </button>
       </div>
     </div>
   );

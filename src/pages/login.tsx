@@ -1,15 +1,29 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
+import { useStore } from '@/store/useStore';
+import { LoginFormData } from '@/types/auth';
+import { ApiError } from '@/types/auth';
+import { authService } from '@/services/auth';
 
 const LoginPage: React.FC = () => {
   const router = useRouter();
-  const [formData, setFormData] = useState({
+  const { login, isAuthenticated, user, isLoading } = useStore();
+  
+  const [formData, setFormData] = useState<LoginFormData>({
     email: '',
     password: '',
     rememberMe: false
   });
-  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string>('');
+
+  // 이미 로그인된 사용자는 대시보드로 리다이렉트
+  useEffect(() => {
+    if (isAuthenticated && user) {
+      const redirectPath = authService.getUserTypeRedirectPath(user.user_type);
+      router.replace(redirectPath);
+    }
+  }, [isAuthenticated, user, router]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value, type, checked } = e.target;
@@ -17,20 +31,57 @@ const LoginPage: React.FC = () => {
       ...prev,
       [name]: type === 'checkbox' ? checked : value
     }));
+    
+    // 입력 시 에러 메시지 초기화
+    if (error) {
+      setError('');
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError('');
+
+    // 기본 유효성 검사
+    if (!formData.email.trim()) {
+      setError('이메일을 입력해주세요.');
+      return;
+    }
     
-    // 아무 값이나 입력되어 있으면 로그인 성공으로 처리
-    if (formData.email && formData.password) {
-      setIsLoading(true);
+    if (!formData.password.trim()) {
+      setError('비밀번호를 입력해주세요.');
+      return;
+    }
+
+    try {
+      // 로그인 API 호출
+      await login({
+        email: formData.email.trim(),
+        password: formData.password
+      });
+
+      // 로그인 성공 시 사용자 타입에 따라 리다이렉트
+      const currentUser = useStore.getState().user;
+      if (currentUser) {
+        const redirectPath = authService.getUserTypeRedirectPath(currentUser.user_type);
+        router.push(redirectPath);
+      }
       
-      // 로딩 효과를 위한 약간의 지연
-      setTimeout(() => {
-        // 홈(대시보드)으로 이동
-        router.push('/expert/dashboard');
-      }, 800);
+    } catch (err) {
+      // API 에러 처리
+      const apiError = err as ApiError;
+      
+      if (apiError.statusCode === 401) {
+        setError('이메일 또는 비밀번호가 올바르지 않습니다.');
+      } else if (apiError.statusCode === 0) {
+        setError('네트워크 연결을 확인해주세요.');
+      } else if (typeof apiError.message === 'string') {
+        setError(apiError.message);
+      } else if (Array.isArray(apiError.message)) {
+        setError(apiError.message[0]);
+      } else {
+        setError('로그인 중 오류가 발생했습니다. 다시 시도해주세요.');
+      }
     }
   };
 
@@ -49,6 +100,15 @@ const LoginPage: React.FC = () => {
 
         {/* 로그인 폼 */}
         <div className="bg-white rounded-custom shadow-large p-12">
+          {/* 에러 메시지 표시 */}
+          {error && (
+            <div className="mb-6 p-4 bg-error-50 border border-error-200 rounded-lg">
+              <div className="flex items-center">
+                <span className="text-error mr-2">⚠️</span>
+                <span className="text-error text-body">{error}</span>
+              </div>
+            </div>
+          )}
 
           <form onSubmit={handleSubmit} className="space-y-8">
             {/* 이메일 입력 */}
@@ -65,7 +125,7 @@ const LoginPage: React.FC = () => {
                 className="w-full px-5 py-4 border border-background-300 rounded-custom text-body 
                           focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary
                           placeholder:text-background-500 bg-background-50"
-                placeholder="admin@expertlink.com"
+                placeholder="이메일 주소를 입력하세요"
                 required
               />
             </div>
@@ -84,7 +144,7 @@ const LoginPage: React.FC = () => {
                 className="w-full px-5 py-4 border border-background-300 rounded-custom text-body
                           focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary
                           placeholder:text-background-500 bg-background-50"
-                placeholder="••••••••"
+                placeholder="비밀번호를 입력하세요"
                 required
               />
             </div>
@@ -131,9 +191,24 @@ const LoginPage: React.FC = () => {
 
           {/* 하단 안내 */}
           <div className="mt-8 text-center">
-            <p className="text-body text-secondary-400">
-              관리자 계정으로 로그인하여 시스템을 이용하세요
+            <p className="text-body text-secondary-400 mb-6">
+              ExpertLink 계정으로 로그인하여 서비스를 이용하세요
             </p>
+            
+            {/* 회원가입 링크 */}
+            <div className="border-t border-background-200 pt-6">
+              <p className="text-body text-secondary-500 mb-4">
+                아직 계정이 없으신가요?
+              </p>
+              <Link 
+                href="/register" 
+                className="inline-block w-full bg-secondary-100 text-secondary-700 py-4 px-6 rounded-custom text-body font-semibold
+                          hover:bg-secondary-200 focus:outline-none focus:ring-2 focus:ring-secondary-400 focus:ring-offset-2 
+                          transition-all duration-smooth transform hover:scale-[1.01]"
+              >
+                회원가입
+              </Link>
+            </div>
           </div>
         </div>
 
