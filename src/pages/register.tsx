@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
 import { useStore } from '@/store/useStore';
-import { RegisterFormData, UserType } from '@/types/auth';
+import { RegisterFormData } from '@/types/auth';
+import { UserType } from '@/types/user';
 import { ApiError } from '@/types/auth';
 import { authService } from '@/services/auth';
 
@@ -16,7 +17,7 @@ const RegisterPage: React.FC = () => {
     password: '',
     confirmPassword: '',
     phone: '',
-    user_type: 'expert',
+    userType: 'expert',
     bio: '',
     agreeToTerms: false,
     agreeToPrivacy: false
@@ -29,7 +30,7 @@ const RegisterPage: React.FC = () => {
   // 이미 로그인된 사용자는 대시보드로 리다이렉트
   useEffect(() => {
     if (isAuthenticated && user) {
-      const redirectPath = authService.getUserTypeRedirectPath(user.user_type);
+      const redirectPath = authService.getUserTypeRedirectPath(user.userType);
       router.replace(redirectPath);
     }
   }, [isAuthenticated, user, router]);
@@ -122,8 +123,8 @@ const RegisterPage: React.FC = () => {
         name: formData.name.trim(),
         email: formData.email.trim(),
         password: formData.password,
-        phone: formData.phone.trim() || undefined,
-        user_type: formData.user_type
+        phone: formData.phone?.trim() || undefined,
+        userType: formData.userType
       };
       
       console.log('회원가입 데이터:', registerData);

@@ -185,11 +185,18 @@ const Sidebar: React.FC<SidebarProps> = ({ userType, isCollapsed = false, onTogg
   const isMenuExpanded = (menuId: string) => expandedMenus.includes(menuId);
 
   const handleLogout = async () => {
+    if (isLoading) return; // 중복 클릭 방지
+    
     try {
+      console.log('로그아웃 시작');
       await logout();
-      router.push('/login');
+      console.log('로그아웃 성공, 로그인 페이지로 이동');
+      // 강제 리다이렉트로 루터 간섭 방지
+      window.location.href = '/login';
     } catch (error) {
       console.error('로그아웃 실패:', error);
+      // 에러가 발생해도 로컬 상태는 초기화하고 로그인 페이지로 이동
+      window.location.href = '/login';
     }
   };
 

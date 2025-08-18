@@ -7,7 +7,7 @@ export interface RegisterDto {
   email: string;
   password: string;
   phone?: string;
-  user_type?: UserType;
+  userType?: UserType;
 }
 
 export interface LoginDto {
@@ -17,24 +17,24 @@ export interface LoginDto {
 
 export interface AuthResponseDto {
   user: User;
-  access_token: string;
-  refresh_token: string;
+  accessToken: string;
+  refreshToken: string;
 }
 
 export interface RefreshTokenDto {
-  refresh_token: string;
+  refreshToken: string;
 }
 
 export interface RefreshTokenResponseDto {
-  access_token: string;
-  refresh_token: string;
+  accessToken: string;
+  refreshToken: string;
 }
 
 // 프론트엔드에서 사용할 인증 상태 타입
 export interface AuthState {
   user: User | null;
-  access_token: string | null;
-  refresh_token: string | null;
+  accessToken: string | null;
+  refreshToken: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
 }
@@ -60,7 +60,7 @@ export interface RegisterFormData {
   password: string;
   confirmPassword: string;
   phone?: string;
-  user_type: UserType;
+  userType: UserType;
   bio?: string;
   agreeToTerms: boolean;
   agreeToPrivacy: boolean;

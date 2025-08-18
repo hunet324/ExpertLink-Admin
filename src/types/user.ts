@@ -8,13 +8,20 @@ export interface User {
   name: string;
   email: string;
   phone?: string;
-  user_type: UserType;
+  // API가 camelCase와 snake_case 둘 다 지원하도록
+  userType?: UserType;
+  user_type?: UserType;
   status: UserStatus;
+  // API 응답 구조에 맞는 필드들
+  profileImage?: string;
   profile_image?: string;
   bio?: string;
-  signup_date: string;
-  created_at: string;
-  updated_at: string;
+  signupDate?: string;
+  signup_date?: string;
+  createdAt?: string;
+  created_at?: string;
+  updatedAt?: string;
+  updated_at?: string;
 }
 
 export interface UpdateProfileDto {

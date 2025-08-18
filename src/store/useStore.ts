@@ -18,7 +18,7 @@ interface AppState extends AuthState {
   registerAndLogin: (userData: RegisterDto) => Promise<void>;
   logout: () => Promise<void>;
   refreshToken: () => Promise<void>;
-  getCurrentUser: () => Promise<void>;
+  getCurrentUser: (forceRefresh?: boolean) => Promise<void>;
   validateAuth: () => Promise<boolean>;
   
   // 사용자 액션
@@ -42,220 +42,288 @@ interface AppState extends AuthState {
 export const useStore = create<AppState>()(
   devtools(
     persist(
-      (set, get) => ({
-        // 초기 상태
-        user: null,
-        access_token: null,
-        refresh_token: null,
-        isAuthenticated: false,
-        isLoading: false,
-        theme: 'light',
-        pendingExpertsCount: 0,
-
-        // 인증 액션
-        login: async (credentials: LoginDto) => {
-          try {
-            set({ isLoading: true });
+      (set, get) => {
+        // 앱 초기화 시 localStorage에서 토큰 복원
+        const initializeTokens = () => {
+          if (typeof window !== 'undefined') {
+            const accessToken = tokenManager.getAccessToken();
+            const refreshToken = tokenManager.getRefreshToken();
             
-            const response = await authService.login(credentials);
-            
-            set({
-              user: response.user,
-              access_token: response.access_token,
-              refresh_token: response.refresh_token,
-              isAuthenticated: true,
-              isLoading: false,
-            });
-          } catch (error) {
-            set({ isLoading: false });
-            throw error;
+            if (accessToken && refreshToken) {
+              console.log('초기화 시 토큰 복원됨');
+              return {
+                accessToken: accessToken,
+                refreshToken: refreshToken,
+                isAuthenticated: true,
+              };
+            }
           }
-        },
+          
+          return {
+            accessToken: null,
+            refreshToken: null,
+            isAuthenticated: false,
+          };
+        };
 
-        register: async (userData: RegisterDto) => {
-          try {
-            set({ isLoading: true });
-            
-            const response = await authService.register(userData);
-            
-            // 회원가입 후 로그인 상태로 만들지 않음 (승인 대기)
-            set({
-              isLoading: false,
-            });
-            
-            return response;
-          } catch (error) {
-            set({ isLoading: false });
-            throw error;
-          }
-        },
+        const initialTokenState = initializeTokens();
+        
+        return {
+          // 초기 상태
+          user: null,
+          ...initialTokenState,
+          isLoading: false,
+          theme: 'light',
+          pendingExpertsCount: 0,
 
-        registerAndLogin: async (userData: RegisterDto) => {
-          try {
-            set({ isLoading: true });
-            
-            const response = await authService.registerAndLogin(userData);
-            
-            set({
-              user: response.user,
-              access_token: response.access_token,
-              refresh_token: response.refresh_token,
-              isAuthenticated: true,
-              isLoading: false,
-            });
-          } catch (error) {
-            set({ isLoading: false });
-            throw error;
-          }
-        },
+          // 인증 액션
+          login: async (credentials: LoginDto) => {
+            try {
+              set({ isLoading: true });
+              
+              const response = await authService.login(credentials);
+              
+              // Zustand 스토어와 tokenManager 동기화
+              tokenManager.setTokens(response.accessToken, response.refreshToken);
+              
+              console.log('스토어에서 받은 로그인 응답:', response);
+              
+              // 사용자 정보가 있으면 바로 설정, 없으면 별도로 가져오기
+              if (response.user) {
+                set({
+                  user: response.user,
+                  accessToken: response.accessToken,
+                  refreshToken: response.refreshToken,
+                  isAuthenticated: true,
+                  isLoading: false,
+                });
+              } else {
+                console.log('사용자 정보가 없음, 별도로 가져오는 중...');
+                
+                // 토큰 먼저 설정
+                set({
+                  accessToken: response.accessToken,
+                  refreshToken: response.refreshToken,
+                  isAuthenticated: true,
+                });
+                
+                // 토큰이 완전히 설정될 때까지 잠시 대기
+                await new Promise(resolve => setTimeout(resolve, 100));
+                
+                try {
+                  // 사용자 정보 별도 조회
+                  console.log('토큰 설정 완료, 사용자 정보 조회 시작');
+                  const user = await authService.getCurrentUser();
+                  set({
+                    user,
+                    isLoading: false,
+                  });
+                } catch (userError) {
+                  console.error('사용자 정보 조회 실패:', userError);
+                  set({
+                    user: null,
+                    isLoading: false,
+                  });
+                }
+              }
+            } catch (error) {
+              set({ isLoading: false });
+              throw error;
+            }
+          },
 
-        logout: async () => {
-          try {
-            set({ isLoading: true });
-            
-            await authService.logout();
-            
-            set({
-              user: null,
-              access_token: null,
-              refresh_token: null,
-              isAuthenticated: false,
-              isLoading: false,
-            });
-          } catch (error) {
-            // 로그아웃은 에러가 발생해도 로컬 상태는 초기화
-            set({
-              user: null,
-              access_token: null,
-              refresh_token: null,
-              isAuthenticated: false,
-              isLoading: false,
-            });
-            throw error;
-          }
-        },
+          register: async (userData: RegisterDto) => {
+            try {
+              set({ isLoading: true });
+              
+              const response = await authService.register(userData);
+              
+              // 회원가입 후 로그인 상태로 만들지 않음 (승인 대기)
+              set({
+                isLoading: false,
+              });
+              
+              return response;
+            } catch (error) {
+              set({ isLoading: false });
+              throw error;
+            }
+          },
 
-        refreshToken: async () => {
-          try {
-            const response = await authService.refreshToken();
-            
-            set({
-              access_token: response.access_token,
-              refresh_token: response.refresh_token,
-            });
-          } catch (error) {
-            // 토큰 갱신 실패 시 로그아웃 처리
-            get().logout();
-            throw error;
-          }
-        },
+          registerAndLogin: async (userData: RegisterDto) => {
+            try {
+              set({ isLoading: true });
+              
+              const response = await authService.registerAndLogin(userData);
+              
+              // Zustand 스토어와 tokenManager 동기화
+              tokenManager.setTokens(response.accessToken, response.refreshToken);
+              
+              set({
+                user: response.user,
+                accessToken: response.accessToken,
+                refreshToken: response.refreshToken,
+                isAuthenticated: true,
+                isLoading: false,
+              });
+            } catch (error) {
+              set({ isLoading: false });
+              throw error;
+            }
+          },
 
-        getCurrentUser: async () => {
-          try {
-            set({ isLoading: true });
-            
-            const user = await authService.getCurrentUser();
-            
-            set({
-              user,
-              isAuthenticated: true,
-              isLoading: false,
-            });
-          } catch (error) {
-            set({
-              user: null,
-              isAuthenticated: false,
-              isLoading: false,
-            });
-            throw error;
-          }
-        },
+          logout: async () => {
+            try {
+              set({ isLoading: true });
+              console.log('전역 상태에서 로그아웃 시작');
+              
+              // 서버에 로그아웃 요청
+              await authService.logout();
+              console.log('서버 로그아웃 성공');
+              
+              // 로컬 상태 초기화
+              set({
+                user: null,
+                accessToken: null,
+                refreshToken: null,
+                isAuthenticated: false,
+                isLoading: false,
+                pendingExpertsCount: 0, // 관리자 상태도 초기화
+              });
+              console.log('로컬 상태 초기화 완료');
+            } catch (error) {
+              console.warn('서버 로그아웃 실패, 로컬 상태만 초기화:', error);
+              // 로그아웃은 에러가 발생해도 로컬 상태는 초기화
+              set({
+                user: null,
+                accessToken: null,
+                refreshToken: null,
+                isAuthenticated: false,
+                isLoading: false,
+                pendingExpertsCount: 0,
+              });
+              // 에러를 다시 던지지 않음 (로그아웃은 항상 성공으로 처리)
+            }
+          },
 
-        validateAuth: async () => {
-          try {
-            const isValid = await authService.validateAndRefreshToken();
-            
-            if (isValid) {
-              // 토큰이 유효하면 사용자 정보 갱신
-              await get().getCurrentUser();
-              return true;
-            } else {
-              // 토큰이 유효하지 않으면 로그아웃 처리
+          refreshToken: async () => {
+            // 토큰 갱신 기능 제거 (무한루프 방지)
+            throw new Error('토큰 갱신 기능이 제거되었습니다. 다시 로그인해주세요.');
+          },
+
+          getCurrentUser: async (forceRefresh: boolean = false) => {
+            try {
+              set({ isLoading: true });
+              console.log('사용자 정보 조회 시작', forceRefresh ? '(강제 새로고침)' : '');
+              
+              const user = await authService.getCurrentUser(forceRefresh);
+              console.log('조회된 사용자 정보:', user);
+              
+              set({
+                user,
+                isAuthenticated: true,
+                isLoading: false,
+              });
+            } catch (error) {
+              console.error('사용자 정보 조회 실패:', error);
+              set({
+                user: null,
+                isAuthenticated: false,
+                isLoading: false,
+              });
+              throw error;
+            }
+          },
+
+          validateAuth: async () => {
+            try {
+              // 토큰 자동 갱신 제거, 단순 유효성만 검사
+              const isValid = await authService.validateAndRefreshToken();
+              
+              if (isValid) {
+                // 토큰이 유효하면 사용자 정보 갱신
+                await get().getCurrentUser();
+                return true;
+              } else {
+                // 토큰이 만료되었으면 로그아웃 처리
+                get().clearUser();
+                return false;
+              }
+            } catch (error) {
               get().clearUser();
               return false;
             }
-          } catch (error) {
-            get().clearUser();
-            return false;
-          }
-        },
+          },
 
-        // 사용자 액션
-        setUser: (user: User) => {
-          set({ 
-            user, 
-            isAuthenticated: true 
-          });
-        },
-
-        clearUser: () => {
-          tokenManager.clearTokens();
-          set({
-            user: null,
-            access_token: null,
-            refresh_token: null,
-            isAuthenticated: false,
-          });
-        },
-
-        updateUser: (userData: Partial<User>) => {
-          const currentUser = get().user;
-          if (currentUser) {
-            set({
-              user: { ...currentUser, ...userData }
+          // 사용자 액션
+          setUser: (user: User) => {
+            set({ 
+              user, 
+              isAuthenticated: true 
             });
-          }
-        },
+          },
 
-        // UI 액션
-        setLoading: (isLoading: boolean) => {
-          set({ isLoading });
-        },
+          clearUser: () => {
+            tokenManager.clearTokens();
+            set({
+              user: null,
+              accessToken: null,
+              refreshToken: null,
+              isAuthenticated: false,
+            });
+          },
 
-        toggleTheme: () => {
-          set((state) => ({ 
-            theme: state.theme === 'light' ? 'dark' : 'light' 
-          }));
-        },
+          updateUser: (userData: Partial<User>) => {
+            const currentUser = get().user;
+            if (currentUser) {
+              set({
+                user: { ...currentUser, ...userData }
+              });
+            }
+          },
 
-        // 토큰 액션
-        setTokens: (accessToken: string, refreshToken: string) => {
-          tokenManager.setTokens(accessToken, refreshToken);
-          set({
-            access_token: accessToken,
-            refresh_token: refreshToken,
-          });
-        },
+          // UI 액션
+          setLoading: (isLoading: boolean) => {
+            set({ isLoading });
+          },
 
-        clearTokens: () => {
-          tokenManager.clearTokens();
-          set({
-            access_token: null,
-            refresh_token: null,
-          });
-        },
+          toggleTheme: () => {
+            set((state) => ({ 
+              theme: state.theme === 'light' ? 'dark' : 'light' 
+            }));
+          },
 
-        // 관리자 액션
-        setPendingExpertsCount: (count: number) => {
-          set({ pendingExpertsCount: count });
-        },
+          // 토큰 액션
+          setTokens: (accessToken: string, refreshToken: string) => {
+            tokenManager.setTokens(accessToken, refreshToken);
+            set({
+              accessToken: accessToken,
+              refreshToken: refreshToken,
+              isAuthenticated: true,
+            });
+          },
 
-        decrementPendingExpertsCount: () => {
-          set((state) => ({ 
-            pendingExpertsCount: Math.max(0, state.pendingExpertsCount - 1) 
-          }));
-        },
-      }),
+          clearTokens: () => {
+            tokenManager.clearTokens();
+            set({
+              accessToken: null,
+              refreshToken: null,
+              isAuthenticated: false,
+            });
+          },
+
+          // 관리자 액션
+          setPendingExpertsCount: (count: number) => {
+            set({ pendingExpertsCount: count });
+          },
+
+          decrementPendingExpertsCount: () => {
+            set((state) => ({ 
+              pendingExpertsCount: Math.max(0, state.pendingExpertsCount - 1) 
+            }));
+          },
+        };
+      },
       {
         name: 'expertlink-auth-store',
         // 민감한 토큰 정보는 localStorage에 저장하지 않음

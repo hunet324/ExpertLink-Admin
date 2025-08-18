@@ -503,7 +503,7 @@ const VacationPage: React.FC = () => {
         <h4 className="text-body font-medium text-secondary mb-2">📝 안내사항</h4>
         <ul className="text-caption text-secondary-600 space-y-1">
           <li>• 주간 기본 스케줄은 정기적인 상담 가능 시간을 의미합니다.</li>
-          <li>• 임시 휴무는 '휴무 관리' 탭에서 별도로 설정할 수 있습니다.</li>
+          <li>• 임시 휴무는 &apos;휴무 관리&apos; 탭에서 별도로 설정할 수 있습니다.</li>
           <li>• 스케줄 변경 시 기존 예약된 상담에는 영향을 주지 않습니다.</li>
         </ul>
       </div>

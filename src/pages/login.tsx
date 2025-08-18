@@ -20,8 +20,15 @@ const LoginPage: React.FC = () => {
   // 이미 로그인된 사용자는 대시보드로 리다이렉트
   useEffect(() => {
     if (isAuthenticated && user) {
-      const redirectPath = authService.getUserTypeRedirectPath(user.user_type);
-      router.replace(redirectPath);
+      const userType = user.userType;
+      if (userType) {
+        const redirectPath = authService.getUserTypeRedirectPath(userType);
+        console.log('useEffect에서 리다이렉트:', redirectPath, '사용자:', userType);
+        router.replace(redirectPath);
+      } else if (user.email === 'admin@example.com') {
+        console.log('useEffect: 관리자 이메일로 추정');
+        router.replace('/admin/dashboard');
+      }
     }
   }, [isAuthenticated, user, router]);
 
@@ -60,11 +67,46 @@ const LoginPage: React.FC = () => {
         password: formData.password
       });
 
+      // 로그인 후 토큰 상태 확인
+      const currentState = useStore.getState();
+      console.log('로그인 후 상태:', {
+        isAuthenticated: currentState.isAuthenticated,
+        hasUser: !!currentState.user,
+        hasAccessToken: !!currentState.accessToken,
+        localStorageToken: !!localStorage.getItem('expertlink_access_token'),
+        userType: currentState.user?.userType
+      });
+
       // 로그인 성공 시 사용자 타입에 따라 리다이렉트
-      const currentUser = useStore.getState().user;
+      const currentUser = currentState.user;
       if (currentUser) {
-        const redirectPath = authService.getUserTypeRedirectPath(currentUser.user_type);
-        router.push(redirectPath);
+        const userType = currentUser.userType;
+        console.log('사용자 정보:', {
+          user: currentUser,
+          userType: currentUser.userType,
+          finalUserType: userType
+        });
+        
+        if (userType) {
+          const redirectPath = authService.getUserTypeRedirectPath(userType);
+          console.log('리다이렉트 경로:', redirectPath, '사용자 타입:', userType);
+          
+          // 현재 페이지가 로그인 페이지인 경우만 리다이렉트
+          if (router.pathname === '/login') {
+            router.replace(redirectPath); // push 대신 replace 사용
+          }
+        } else {
+          console.warn('사용자 타입이 누락됨. API 응답을 확인하세요:', currentUser);
+          // 임시로 관리자 대시보드로 이동 (이메일이 admin@example.com인 경우)
+          if (currentUser.email === 'admin@example.com') {
+            console.log('관리자 이메일로 추정, 관리자 대시보드로 이동');
+            router.replace('/admin/dashboard');
+          } else {
+            router.replace('/');
+          }
+        }
+      } else {
+        console.warn('사용자 정보가 없습니다:', currentUser);
       }
       
     } catch (err) {

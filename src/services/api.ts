@@ -21,25 +21,6 @@ export const TOKEN_KEYS = {
   REFRESH_TOKEN: 'expertlink_refresh_token',
 } as const;
 
-// 헤더 유틸리티
-const createHeaders = (additionalHeaders?: HeadersInit): Record<string, string> => {
-  const baseHeaders: Record<string, string> = {
-    'Content-Type': 'application/json',
-  };
-
-  // 추가 헤더가 있으면 병합
-  if (additionalHeaders) {
-    Object.assign(baseHeaders, additionalHeaders);
-  }
-
-  // 토큰이 있으면 Authorization 헤더 추가
-  const accessToken = tokenManager.getAccessToken();
-  if (accessToken) {
-    baseHeaders.Authorization = `Bearer ${accessToken}`;
-  }
-
-  return baseHeaders;
-};
 
 // 토큰 관리 유틸리티
 export const tokenManager = {
@@ -55,8 +36,22 @@ export const tokenManager = {
   
   setTokens: (accessToken: string, refreshToken: string): void => {
     if (typeof window === 'undefined') return;
+    
+    console.log('토큰 저장 시작:', {
+      hasAccessToken: !!accessToken,
+      hasRefreshToken: !!refreshToken,
+      accessTokenPrefix: accessToken?.substring(0, 20) + '...'
+    });
+    
     localStorage.setItem(TOKEN_KEYS.ACCESS_TOKEN, accessToken);
     localStorage.setItem(TOKEN_KEYS.REFRESH_TOKEN, refreshToken);
+    
+    // 저장 확인
+    const storedToken = localStorage.getItem(TOKEN_KEYS.ACCESS_TOKEN);
+    console.log('토큰 저장 완료:', {
+      stored: !!storedToken,
+      matches: storedToken === accessToken
+    });
   },
   
   clearTokens: (): void => {
@@ -85,43 +80,38 @@ export class ApiClient {
 
   private async request<T>(
     endpoint: string,
-    options: RequestInit = {},
-    retryCount: number = 0
+    options: RequestInit = {}
   ): Promise<T> {
     const url = `${this.baseURL}${endpoint}`;
     
-    // 토큰 만료 체크 및 자동 갱신
+    // 토큰 먼저 확인
     const accessToken = tokenManager.getAccessToken();
-    if (accessToken && tokenManager.isTokenExpired(accessToken)) {
-      console.log('토큰이 만료되었습니다. 갱신을 시도합니다.');
-      try {
-        const { authService } = await import('./auth');
-        await authService.refreshToken();
-        console.log('토큰 갱신 성공');
-      } catch (error) {
-        console.error('토큰 갱신 실패:', error);
-        // 토큰 갱신 실패 시 로그아웃 처리
-        tokenManager.clearTokens();
-        if (typeof window !== 'undefined') {
-          window.location.href = '/login';
-        }
-        throw {
-          statusCode: 401,
-          message: '인증이 만료되었습니다. 다시 로그인해주세요.'
-        } as ApiError;
-      }
-    }
-    
-    // 기본 헤더 설정
+    console.log('API 클라이언트 토큰 체크:', {
+      hasToken: !!accessToken,
+      tokenSource: accessToken ? 'tokenManager' : 'none',
+      localStorageCheck: !!localStorage.getItem('expertlink_access_token')
+    });
+
+    // 기본 헤더 설정 (Authorization 헤더를 먼저 설정)
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
-      ...(options.headers as Record<string, string>),
     };
 
-    // 갱신된 토큰으로 Authorization 헤더 추가
-    const currentToken = tokenManager.getAccessToken();
-    if (currentToken) {
-      headers.Authorization = `Bearer ${currentToken}`;
+    // 토큰이 있으면 Authorization 헤더 추가
+    if (accessToken) {
+      headers.Authorization = `Bearer ${accessToken}`;
+      console.log('Authorization 헤더 설정됨:', headers.Authorization.substring(0, 30) + '...');
+    }
+
+    // 추가 헤더 병합 (Authorization 헤더가 덮어씌워지지 않도록 주의)
+    if (options.headers) {
+      const additionalHeaders = options.headers as Record<string, string>;
+      Object.keys(additionalHeaders).forEach(key => {
+        // Authorization 헤더는 덮어씌우지 않음 (토큰이 있는 경우)
+        if (key.toLowerCase() !== 'authorization' || !accessToken) {
+          headers[key] = additionalHeaders[key];
+        }
+      });
     }
 
     const config: RequestInit = {
@@ -129,32 +119,41 @@ export class ApiClient {
       headers,
     };
 
-    // 디버깅을 위한 로그
-    console.log('API Request:', { url, config });
+    // 단순화된 디버깅 로그
+    console.log('API Request:', { url, method: config.method, hasToken: !!accessToken });
+    
+    if (accessToken) {
+      console.log('Authorization Header:', headers.Authorization?.substring(0, 20) + '...');
+      try {
+        const payload = JSON.parse(atob(accessToken.split('.')[1]));
+        console.log('토큰 정보:', { 
+          user_type: payload.user_type, 
+          email: payload.email,
+          exp: new Date(payload.exp * 1000).toLocaleString()
+        });
+      } catch (e) {
+        console.warn('토큰 디코딩 실패:', e);
+      }
+    } else {
+      console.warn('⚠️ API 요청에 토큰이 없습니다!');
+    }
 
     try {
       const response = await fetch(url, config);
       
-      console.log('API Response:', { 
-        status: response.status, 
-        statusText: response.statusText,
-        headers: Object.fromEntries(response.headers.entries())
-      });
+      console.log('API Response:', response.status, response.statusText);
       
-      // 401 에러인 경우 토큰 갱신 후 재시도 (1회만)
-      if (response.status === 401 && retryCount === 0) {
-        console.log('401 에러 발생, 토큰 갱신 후 재시도');
-        try {
-          const { authService } = await import('./auth');
-          await authService.refreshToken();
-          return this.request<T>(endpoint, options, retryCount + 1);
-        } catch (refreshError) {
-          console.error('토큰 갱신 실패:', refreshError);
-          tokenManager.clearTokens();
-          if (typeof window !== 'undefined') {
-            window.location.href = '/login';
-          }
+      // 401 에러 시 단순히 로그인 페이지로 리다이렉트 (갱신 시도 없음)
+      if (response.status === 401) {
+        console.log('401 에러: 로그인이 필요합니다.');
+        tokenManager.clearTokens();
+        if (typeof window !== 'undefined' && !window.location.pathname.includes('/login')) {
+          window.location.href = '/login';
         }
+        throw {
+          statusCode: 401,
+          message: '로그인이 필요합니다.'
+        } as ApiError;
       }
       
       // 응답이 성공적이지 않은 경우
