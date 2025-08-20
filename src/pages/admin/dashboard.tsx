@@ -1,6 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
+import Link from 'next/link';
+import { useStore } from '@/store/useStore';
+import { UserType } from '@/types/user';
+import { withAdminOnly } from '@/components/withPermission';
+import AdminLevelBadge from '@/components/AdminLevelBadge';
+import PermissionGuard from '@/components/PermissionGuard';
 import Sidebar from '@/components/Layout/Sidebar';
+import { hasMinPermissionLevel } from '@/utils/permissions';
 
 interface SystemStats {
   totalUsers: number;
@@ -30,17 +37,60 @@ interface PendingApproval {
 
 const AdminDashboard: React.FC = () => {
   const router = useRouter();
+  const { user, isLoading } = useStore();
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string>('');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
-  // 시스템 통계 샘플 데이터
-  const systemStats: SystemStats = {
-    totalUsers: 1247,
-    totalExperts: 89,
-    totalSessions: 3429,
-    totalRevenue: 45680000,
-    pendingApprovals: 15,
-    activeUsers: 342
+  const userType = user?.user_type || user?.userType;
+
+  // 권한별 시스템 통계 데이터 생성
+  const getSystemStats = (): SystemStats => {
+    // 수퍼관리자는 전체 데이터
+    if (userType === 'super_admin') {
+      return {
+        totalUsers: 2847,
+        totalExperts: 156,
+        totalSessions: 8429,
+        totalRevenue: 125680000,
+        pendingApprovals: 23,
+        activeUsers: 892
+      };
+    }
+    // 지역관리자는 지역 데이터
+    if (userType === 'regional_manager') {
+      return {
+        totalUsers: 1247,
+        totalExperts: 89,
+        totalSessions: 3429,
+        totalRevenue: 45680000,
+        pendingApprovals: 15,
+        activeUsers: 342
+      };
+    }
+    // 센터관리자는 센터 데이터
+    if (userType === 'center_manager') {
+      return {
+        totalUsers: 456,
+        totalExperts: 18,
+        totalSessions: 1245,
+        totalRevenue: 15680000,
+        pendingApprovals: 8,
+        activeUsers: 123
+      };
+    }
+    // 일반 직원은 제한된 데이터
+    return {
+      totalUsers: 0,
+      totalExperts: 18,
+      totalSessions: 1245,
+      totalRevenue: 0,
+      pendingApprovals: 8,
+      activeUsers: 0
+    };
   };
+
+  const systemStats = getSystemStats();
 
   // 최근 활동 샘플 데이터
   const recentActivities: RecentActivity[] = [
@@ -157,126 +207,233 @@ const AdminDashboard: React.FC = () => {
     return `${diffDays}일 전`;
   };
 
+  // 데이터 로딩
+  useEffect(() => {
+    const loadDashboardData = async () => {
+      try {
+        setLoading(true);
+        // 실제로는 API 호출하여 사용자별 권한에 맞는 데이터 로드
+        await new Promise(resolve => setTimeout(resolve, 500)); // 시뮬레이션
+        setError('');
+      } catch (err: any) {
+        console.error('대시보드 데이터 로딩 실패:', err);
+        setError(err.message || '데이터를 불러올 수 없습니다.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (userType) {
+      loadDashboardData();
+    }
+  }, [userType]);
+
+  if (isLoading || loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <div className="animate-spin h-12 w-12 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-4"></div>
+          <p className="text-gray-600">대시보드를 불러오는 중...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!userType) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <div className="text-6xl mb-4">⚠️</div>
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">권한 정보를 확인할 수 없습니다</h1>
+          <p className="text-gray-600">다시 로그인해주세요.</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="flex h-screen bg-background-50">
-      {/* 사이드바 */}
+    <div className="flex h-screen bg-gray-50">
+      {/* Sidebar */}
       <Sidebar 
-        userType="admin" 
+        userType={userType} 
         isCollapsed={sidebarCollapsed}
         onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
       />
 
-      {/* 메인 콘텐츠 */}
+      {/* Main Content */}
       <div className="flex-1 flex flex-col overflow-hidden">
+        <div className="flex-1 overflow-y-auto p-6">
+          <div className="max-w-7xl mx-auto">
         {/* 헤더 */}
-        <header className="bg-white shadow-soft px-6 py-4">
+        <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-h2 font-bold text-secondary">관리자 대시보드</h1>
-              <p className="text-caption text-secondary-400 mt-1">
-                ExpertLink 플랫폼의 전체 현황을 모니터링하고 관리할 수 있습니다.
-              </p>
+              <h1 className="text-2xl font-bold text-gray-900 mb-2">
+                {userType === 'super_admin' ? '🌐 최고 관리자 대시보드' :
+                 userType === 'regional_manager' ? '🏗️ 지역 관리자 대시보드' :
+                 userType === 'center_manager' ? '🏢 센터 관리자 대시보드' :
+                 '📊 관리자 대시보드'}
+              </h1>
+              <div className="flex items-center gap-2">
+                <p className="text-gray-600">
+                  {userType === 'super_admin' ? '전체 시스템 통합 관리 및 모니터링' :
+                   userType === 'regional_manager' ? '지역별 센터 및 성과 관리' :
+                   userType === 'center_manager' ? '센터 운영 및 전문가 관리' :
+                   '일일 업무 및 승인 관리'}
+                </p>
+                <AdminLevelBadge userType={userType} size="sm" />
+              </div>
             </div>
-            <div className="flex items-center space-x-4">
+            
+            <div className="flex items-center gap-4">
+              {/* 수퍼관리자 전용 빠른 접근 */}
+              <PermissionGuard minLevel="super_admin">
+                <Link
+                  href="/admin/super-admin/global-dashboard"
+                  className="bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
+                >
+                  👑 전체 시스템 현황
+                </Link>
+              </PermissionGuard>
+              
               {/* 시스템 상태 */}
-              <div className="flex items-center space-x-2 bg-accent-50 px-3 py-2 rounded-lg">
-                <div className="w-2 h-2 bg-accent rounded-full animate-pulse"></div>
-                <span className="text-caption text-accent-700">시스템 정상</span>
+              <div className="flex items-center space-x-2 bg-green-50 px-3 py-2 rounded-lg">
+                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                <span className="text-sm text-green-700">시스템 정상</span>
               </div>
 
-              {/* 프로필 */}
+              {/* 사용자 정보 */}
               <div className="flex items-center space-x-2">
-                <div className="w-8 h-8 bg-secondary-400 rounded-full flex items-center justify-center">
-                  <span className="text-white text-sm font-bold">관</span>
+                <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
+                  <span className="text-white text-sm font-bold">
+                    {user?.name?.charAt(0) || '관'}
+                  </span>
                 </div>
-                <span className="text-body text-secondary-600">관리자</span>
+                <div className="text-sm">
+                  <div className="font-medium text-gray-900">{user?.name || '관리자'}</div>
+                  <div className="text-gray-500">{user?.email}</div>
+                </div>
               </div>
             </div>
           </div>
-        </header>
+        </div>
+
+        {/* 에러 메시지 */}
+        {error && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+            <div className="flex items-center">
+              <span className="text-red-500 mr-2">⚠️</span>
+              <p className="text-red-700">{error}</p>
+            </div>
+          </div>
+        )}
 
         {/* 메인 콘텐츠 영역 */}
-        <main className="flex-1 overflow-y-auto p-6 space-y-6">
-          {/* 주요 지표 카드 */}
+        <div className="space-y-6">
+          {/* 권한별 주요 지표 카드 */}
           <div className="grid grid-cols-2 lg:grid-cols-6 gap-4">
-            <div className="bg-white rounded-custom shadow-soft p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-caption text-secondary-400">총 사용자</p>
-                  <p className="text-h3 font-bold text-secondary mt-1">{systemStats.totalUsers.toLocaleString()}</p>
-                </div>
-                <div className="w-10 h-10 bg-primary-100 rounded-lg flex items-center justify-center">
-                  <span className="text-xl">👥</span>
+            {/* 총 사용자 - 센터관리자 이상만 표시 */}
+            <PermissionGuard minLevel="center_manager">
+              <div className="bg-white rounded-lg shadow-sm p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-gray-500">
+                      {userType === 'super_admin' ? '전체 사용자' :
+                       userType === 'regional_manager' ? '지역 사용자' :
+                       '센터 사용자'}
+                    </p>
+                    <p className="text-2xl font-bold text-gray-900 mt-1">{systemStats.totalUsers.toLocaleString()}</p>
+                  </div>
+                  <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                    <span className="text-xl">👥</span>
+                  </div>
                 </div>
               </div>
-            </div>
+            </PermissionGuard>
 
-            <div className="bg-white rounded-custom shadow-soft p-4">
+            {/* 전문가 수 - 모든 관리자가 볼 수 있음 */}
+            <div className="bg-white rounded-lg shadow-sm p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-caption text-secondary-400">전문가</p>
-                  <p className="text-h3 font-bold text-secondary mt-1">{systemStats.totalExperts}</p>
+                  <p className="text-sm text-gray-500">
+                    {userType === 'super_admin' ? '전체 전문가' :
+                     userType === 'regional_manager' ? '지역 전문가' :
+                     '센터 전문가'}
+                  </p>
+                  <p className="text-2xl font-bold text-gray-900 mt-1">{systemStats.totalExperts}</p>
                 </div>
-                <div className="w-10 h-10 bg-accent-100 rounded-lg flex items-center justify-center">
+                <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
                   <span className="text-xl">👨‍⚕️</span>
                 </div>
               </div>
             </div>
 
-            <div className="bg-white rounded-custom shadow-soft p-4">
+            {/* 총 상담 - 모든 관리자가 볼 수 있음 */}
+            <div className="bg-white rounded-lg shadow-sm p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-caption text-secondary-400">총 상담</p>
-                  <p className="text-h3 font-bold text-secondary mt-1">{systemStats.totalSessions.toLocaleString()}</p>
+                  <p className="text-sm text-gray-500">총 상담</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-1">{systemStats.totalSessions.toLocaleString()}</p>
                 </div>
-                <div className="w-10 h-10 bg-logo-point/20 rounded-lg flex items-center justify-center">
+                <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
                   <span className="text-xl">💬</span>
                 </div>
               </div>
             </div>
 
-            <div className="bg-white rounded-custom shadow-soft p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-caption text-secondary-400">총 매출</p>
-                  <p className="text-h3 font-bold text-secondary mt-1">{formatCurrency(systemStats.totalRevenue)}</p>
-                </div>
-                <div className="w-10 h-10 bg-secondary-100 rounded-lg flex items-center justify-center">
-                  <span className="text-xl">💰</span>
+            {/* 총 매출 - 센터관리자 이상만 표시 */}
+            <PermissionGuard minLevel="center_manager">
+              <div className="bg-white rounded-lg shadow-sm p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-gray-500">총 매출</p>
+                    <p className="text-2xl font-bold text-gray-900 mt-1">
+                      {systemStats.totalRevenue > 0 ? formatCurrency(systemStats.totalRevenue) : '-'}
+                    </p>
+                  </div>
+                  <div className="w-10 h-10 bg-yellow-100 rounded-lg flex items-center justify-center">
+                    <span className="text-xl">💰</span>
+                  </div>
                 </div>
               </div>
-            </div>
+            </PermissionGuard>
 
-            <div className="bg-white rounded-custom shadow-soft p-4">
+            {/* 승인 대기 - 모든 관리자가 볼 수 있음 */}
+            <div className="bg-white rounded-lg shadow-sm p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-caption text-secondary-400">승인 대기</p>
-                  <p className="text-h3 font-bold text-error mt-1">{systemStats.pendingApprovals}</p>
+                  <p className="text-sm text-gray-500">승인 대기</p>
+                  <p className="text-2xl font-bold text-red-600 mt-1">{systemStats.pendingApprovals}</p>
                 </div>
-                <div className="w-10 h-10 bg-error-100 rounded-lg flex items-center justify-center">
+                <div className="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center">
                   <span className="text-xl">⏳</span>
                 </div>
               </div>
             </div>
 
-            <div className="bg-white rounded-custom shadow-soft p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-caption text-secondary-400">활성 사용자</p>
-                  <p className="text-h3 font-bold text-accent mt-1">{systemStats.activeUsers}</p>
-                </div>
-                <div className="w-10 h-10 bg-accent-100 rounded-lg flex items-center justify-center">
-                  <span className="text-xl">🟢</span>
+            {/* 활성 사용자 - 센터관리자 이상만 표시 */}
+            <PermissionGuard minLevel="center_manager">
+              <div className="bg-white rounded-lg shadow-sm p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-gray-500">활성 사용자</p>
+                    <p className="text-2xl font-bold text-green-600 mt-1">
+                      {systemStats.activeUsers > 0 ? systemStats.activeUsers : '-'}
+                    </p>
+                  </div>
+                  <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
+                    <span className="text-xl">🟢</span>
+                  </div>
                 </div>
               </div>
-            </div>
+            </PermissionGuard>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* 최근 활동 */}
-            <div className="bg-white rounded-custom shadow-soft">
-              <div className="p-6 border-b border-background-200">
-                <h2 className="text-h3 font-semibold text-secondary flex items-center">
+            <div className="bg-white rounded-lg shadow-sm">
+              <div className="p-6 border-b border-gray-200">
+                <h2 className="text-lg font-semibold text-gray-900 flex items-center">
                   <span className="mr-2">📊</span>
                   최근 시스템 활동
                 </h2>
@@ -285,12 +442,12 @@ const AdminDashboard: React.FC = () => {
                 {recentActivities.length > 0 ? (
                   <div className="space-y-3">
                     {recentActivities.map((activity) => (
-                      <div key={activity.id} className={`p-3 border-l-4 rounded ${getActivityColor(activity.status)}`}>
+                      <div key={activity.id} className={`p-3 border-l-4 rounded-lg ${getActivityColor(activity.status)}`}>
                         <div className="flex items-start space-x-3">
                           <span className="text-lg flex-shrink-0">{getActivityIcon(activity.type)}</span>
                           <div className="flex-1">
-                            <p className="text-body text-secondary-700">{activity.description}</p>
-                            <p className="text-caption text-secondary-400 mt-1">{formatTime(activity.timestamp)}</p>
+                            <p className="text-sm text-gray-700">{activity.description}</p>
+                            <p className="text-xs text-gray-500 mt-1">{formatTime(activity.timestamp)}</p>
                           </div>
                         </div>
                       </div>
@@ -299,30 +456,30 @@ const AdminDashboard: React.FC = () => {
                 ) : (
                   <div className="text-center py-8">
                     <span className="text-4xl mb-4 block">📈</span>
-                    <p className="text-secondary-400">최근 활동이 없습니다.</p>
+                    <p className="text-gray-500">최근 활동이 없습니다.</p>
                   </div>
                 )}
-                <div className="mt-4 pt-4 border-t border-background-200">
-                  <button 
-                    onClick={() => router.push('/admin/system/logs')}
-                    className="w-full text-primary hover:text-primary-600 text-center text-caption font-medium transition-colors"
+                <div className="mt-4 pt-4 border-t border-gray-200">
+                  <Link
+                    href="/admin/system/logs"
+                    className="w-full text-blue-600 hover:text-blue-800 text-center text-sm font-medium transition-colors block"
                   >
                     전체 로그 보기 →
-                  </button>
+                  </Link>
                 </div>
               </div>
             </div>
 
             {/* 승인 대기 목록 */}
-            <div className="bg-white rounded-custom shadow-soft">
-              <div className="p-6 border-b border-background-200">
-                <h2 className="text-h3 font-semibold text-secondary flex items-center justify-between">
+            <div className="bg-white rounded-lg shadow-sm">
+              <div className="p-6 border-b border-gray-200">
+                <h2 className="text-lg font-semibold text-gray-900 flex items-center justify-between">
                   <div className="flex items-center">
                     <span className="mr-2">✅</span>
                     승인 대기 목록
                   </div>
                   {pendingApprovals.length > 0 && (
-                    <span className="bg-error text-white text-xs px-2 py-1 rounded-full">
+                    <span className="bg-red-500 text-white text-xs px-2 py-1 rounded-full">
                       {pendingApprovals.length}
                     </span>
                   )}
@@ -332,15 +489,15 @@ const AdminDashboard: React.FC = () => {
                 {pendingApprovals.length > 0 ? (
                   <div className="space-y-3">
                     {pendingApprovals.map((approval) => (
-                      <div key={approval.id} className="p-3 border border-background-200 rounded-lg">
+                      <div key={approval.id} className="p-3 border border-gray-200 rounded-lg">
                         <div className="flex items-start justify-between mb-2">
                           <div className="flex items-center space-x-2">
                             <span className="text-lg">
                               {approval.type === 'expert' ? '👨‍⚕️' : '👤'}
                             </span>
                             <div>
-                              <h4 className="text-body font-medium text-secondary-700">{approval.name}</h4>
-                              <p className="text-caption text-secondary-400">{approval.email}</p>
+                              <h4 className="text-sm font-medium text-gray-700">{approval.name}</h4>
+                              <p className="text-xs text-gray-500">{approval.email}</p>
                             </div>
                           </div>
                           <span className={`px-2 py-1 rounded-full text-xs font-medium border ${getPriorityColor(approval.priority)}`}>
@@ -348,14 +505,14 @@ const AdminDashboard: React.FC = () => {
                           </span>
                         </div>
                         <div className="flex items-center justify-between">
-                          <span className="text-caption text-secondary-400">
+                          <span className="text-xs text-gray-500">
                             {formatTime(approval.submittedAt)}
                           </span>
                           <div className="flex space-x-2">
-                            <button className="bg-primary text-white px-3 py-1 rounded text-xs font-medium hover:bg-primary-600 transition-colors">
+                            <button className="bg-blue-500 text-white px-3 py-1 rounded text-xs font-medium hover:bg-blue-600 transition-colors">
                               승인
                             </button>
-                            <button className="bg-error text-white px-3 py-1 rounded text-xs font-medium hover:bg-error-600 transition-colors">
+                            <button className="bg-red-500 text-white px-3 py-1 rounded text-xs font-medium hover:bg-red-600 transition-colors">
                               거절
                             </button>
                           </div>
@@ -366,65 +523,121 @@ const AdminDashboard: React.FC = () => {
                 ) : (
                   <div className="text-center py-8">
                     <span className="text-4xl mb-4 block">✅</span>
-                    <p className="text-secondary-400">승인 대기 중인 항목이 없습니다.</p>
+                    <p className="text-gray-500">승인 대기 중인 항목이 없습니다.</p>
                   </div>
                 )}
-                <div className="mt-4 pt-4 border-t border-background-200">
-                  <button 
-                    onClick={() => router.push('/admin/approval')}
-                    className="w-full text-primary hover:text-primary-600 text-center text-caption font-medium transition-colors"
+                <div className="mt-4 pt-4 border-t border-gray-200">
+                  <Link
+                    href="/admin/approval"
+                    className="w-full text-blue-600 hover:text-blue-800 text-center text-sm font-medium transition-colors block"
                   >
                     전체 승인 관리 →
-                  </button>
+                  </Link>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* 빠른 작업 버튼들 */}
-          <div className="bg-white rounded-custom shadow-soft p-6">
-            <h2 className="text-h3 font-semibold text-secondary mb-4 flex items-center">
+          {/* 권한별 빠른 작업 버튼들 */}
+          <div className="bg-white rounded-lg shadow-sm p-6">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
               <span className="mr-2">⚡</span>
               빠른 작업
             </h2>
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-              <button 
-                onClick={() => router.push('/admin/approval/experts')}
-                className="flex flex-col items-center p-4 bg-primary-50 hover:bg-primary-100 rounded-lg transition-colors group"
+              {/* 전문가 승인 - 모든 관리자 */}
+              <Link
+                href="/admin/approval/experts"
+                className="flex flex-col items-center p-4 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors group"
               >
                 <span className="text-2xl mb-2">👨‍⚕️</span>
-                <span className="text-caption font-medium text-primary group-hover:text-primary-600">전문가 승인</span>
-              </button>
+                <span className="text-sm font-medium text-blue-600 group-hover:text-blue-700">전문가 승인</span>
+              </Link>
               
-              <button 
-                onClick={() => router.push('/admin/system/users')}
-                className="flex flex-col items-center p-4 bg-accent-50 hover:bg-accent-100 rounded-lg transition-colors group"
-              >
-                <span className="text-2xl mb-2">👥</span>
-                <span className="text-caption font-medium text-accent-600 group-hover:text-accent-700">사용자 관리</span>
-              </button>
+              {/* 사용자 관리 - 센터관리자 이상 */}
+              <PermissionGuard minLevel="center_manager">
+                <Link
+                  href="/admin/system/users"
+                  className="flex flex-col items-center p-4 bg-green-50 hover:bg-green-100 rounded-lg transition-colors group"
+                >
+                  <span className="text-2xl mb-2">👥</span>
+                  <span className="text-sm font-medium text-green-600 group-hover:text-green-700">사용자 관리</span>
+                </Link>
+              </PermissionGuard>
               
-              <button 
-                onClick={() => router.push('/admin/statistics/revenue')}
-                className="flex flex-col items-center p-4 bg-secondary-50 hover:bg-secondary-100 rounded-lg transition-colors group"
-              >
-                <span className="text-2xl mb-2">💰</span>
-                <span className="text-caption font-medium text-secondary-600 group-hover:text-secondary-700">매출 통계</span>
-              </button>
+              {/* 센터 관리 - 센터관리자 이상 */}
+              <PermissionGuard minLevel="center_manager">
+                <Link
+                  href="/admin/centers/list"
+                  className="flex flex-col items-center p-4 bg-purple-50 hover:bg-purple-100 rounded-lg transition-colors group"
+                >
+                  <span className="text-2xl mb-2">🏢</span>
+                  <span className="text-sm font-medium text-purple-600 group-hover:text-purple-700">센터 관리</span>
+                </Link>
+              </PermissionGuard>
               
-              <button 
-                onClick={() => router.push('/admin/system/settings')}
-                className="flex flex-col items-center p-4 bg-background-100 hover:bg-background-200 rounded-lg transition-colors group"
-              >
-                <span className="text-2xl mb-2">⚙️</span>
-                <span className="text-caption font-medium text-secondary-500 group-hover:text-secondary-600">시스템 설정</span>
-              </button>
+              {/* 매출 통계 - 센터관리자 이상 */}
+              <PermissionGuard minLevel="center_manager">
+                <Link
+                  href="/admin/statistics/revenue"
+                  className="flex flex-col items-center p-4 bg-yellow-50 hover:bg-yellow-100 rounded-lg transition-colors group"
+                >
+                  <span className="text-2xl mb-2">💰</span>
+                  <span className="text-sm font-medium text-yellow-600 group-hover:text-yellow-700">매출 통계</span>
+                </Link>
+              </PermissionGuard>
+              
+              {/* 시스템 설정 - 수퍼관리자 전용 */}
+              <PermissionGuard minLevel="super_admin">
+                <Link
+                  href="/admin/super-admin/global-settings"
+                  className="flex flex-col items-center p-4 bg-red-50 hover:bg-red-100 rounded-lg transition-colors group"
+                >
+                  <span className="text-2xl mb-2">⚙️</span>
+                  <span className="text-sm font-medium text-red-600 group-hover:text-red-700">글로벌 설정</span>
+                </Link>
+              </PermissionGuard>
+              
+              {/* 관리자 계정 - 수퍼관리자 전용 */}
+              <PermissionGuard minLevel="super_admin">
+                <Link
+                  href="/admin/super-admin/admin-accounts"
+                  className="flex flex-col items-center p-4 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors group"
+                >
+                  <span className="text-2xl mb-2">👤</span>
+                  <span className="text-sm font-medium text-indigo-600 group-hover:text-indigo-700">관리자 계정</span>
+                </Link>
+              </PermissionGuard>
+              
+              {/* 계층 관리 - 센터관리자 이상 */}
+              <PermissionGuard minLevel="center_manager">
+                <Link
+                  href="/admin/hierarchy/staff"
+                  className="flex flex-col items-center p-4 bg-teal-50 hover:bg-teal-100 rounded-lg transition-colors group"
+                >
+                  <span className="text-2xl mb-2">🏗️</span>
+                  <span className="text-sm font-medium text-teal-600 group-hover:text-teal-700">계층 관리</span>
+                </Link>
+              </PermissionGuard>
+              
+              {/* 전문가 관리 - 센터관리자 이상 */}
+              <PermissionGuard minLevel="center_manager">
+                <Link
+                  href="/admin/experts/list"
+                  className="flex flex-col items-center p-4 bg-pink-50 hover:bg-pink-100 rounded-lg transition-colors group"
+                >
+                  <span className="text-2xl mb-2">👨‍⚕️</span>
+                  <span className="text-sm font-medium text-pink-600 group-hover:text-pink-700">전문가 관리</span>
+                </Link>
+              </PermissionGuard>
             </div>
           </div>
-        </main>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
 };
 
-export default AdminDashboard;
+export default withAdminOnly(AdminDashboard);

@@ -2,6 +2,10 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useStore } from '@/store/useStore';
+import { UserType } from '@/types/user';
+import { canAccessMenu, hasMinPermissionLevel, isAdmin } from '@/utils/permissions';
+import PermissionGuard from '@/components/PermissionGuard';
+import AdminLevelBadge from '@/components/AdminLevelBadge';
 
 interface MenuItem {
   id: string;
@@ -10,10 +14,16 @@ interface MenuItem {
   path: string;
   badge?: number | string;
   children?: MenuItem[];
+  // 권한 관련 필드
+  minLevel?: UserType;
+  adminOnly?: boolean;
+  centerManagerOnly?: boolean;
+  superAdminOnly?: boolean;
+  requiresCenter?: boolean;
 }
 
 interface SidebarProps {
-  userType: 'expert' | 'admin';
+  userType: UserType;
   isCollapsed?: boolean;
   onToggleCollapse?: () => void;
 }
@@ -98,15 +108,61 @@ const Sidebar: React.FC<SidebarProps> = ({ userType, isCollapsed = false, onTogg
     }
   ];
 
-  // 관리자용 메뉴
+  // 관리자용 메뉴 (권한 체계 통일)
   const adminMenus: MenuItem[] = [
+    {
+      id: 'dashboard',
+      label: '대시보드',
+      icon: '🏠',
+      path: '/admin/dashboard',
+      minLevel: 'staff' // 🎯 통일: adminOnly → minLevel
+    },
+    {
+      id: 'centers',
+      label: '센터 관리',
+      icon: '🏢',
+      path: '/admin/centers',
+      minLevel: 'center_manager', // 🎯 통일: centerManagerOnly → minLevel
+      children: [
+        { id: 'center-list', label: '센터 목록', icon: '📋', path: '/admin/centers/list', minLevel: 'center_manager' },
+        { id: 'center-staff', label: '센터 직원', icon: '👥', path: '/admin/centers/staff', minLevel: 'center_manager' },
+        { id: 'center-experts', label: '센터 전문가', icon: '👨‍⚕️', path: '/admin/centers/experts', minLevel: 'center_manager' },
+        { id: 'center-create', label: '센터 등록', icon: '➕', path: '/admin/centers/create', minLevel: 'super_admin' } // 🎯 통일: superAdminOnly → minLevel
+      ]
+    },
+    {
+      id: 'hierarchy',
+      label: '계층 관리',
+      icon: '🏗️',
+      path: '/admin/hierarchy',
+      minLevel: 'center_manager', // 🎯 통일
+      children: [
+        { id: 'staff-management', label: '직원 관리', icon: '👥', path: '/admin/hierarchy/staff', minLevel: 'center_manager' },
+        { id: 'hierarchy-tree', label: '조직도', icon: '🌳', path: '/admin/hierarchy/tree', minLevel: 'center_manager' },
+        { id: 'permissions', label: '권한 테스트', icon: '🔐', path: '/admin/hierarchy/permissions', minLevel: 'center_manager' }
+      ]
+    },
+    {
+      id: 'experts',
+      label: '전문가 관리',
+      icon: '👨‍⚕️',
+      path: '/admin/experts',
+      minLevel: 'center_manager', // 🎯 통일
+      children: [
+        { id: 'expert-list', label: '전문가 목록', icon: '📋', path: '/admin/experts/list', minLevel: 'center_manager' },
+        { id: 'vacation-management', label: '휴가 관리', icon: '🏖️', path: '/admin/experts/vacation', minLevel: 'center_manager' },
+        { id: 'schedule-management', label: '스케줄 관리', icon: '📅', path: '/admin/experts/schedule', minLevel: 'center_manager' },
+        { id: 'working-hours', label: '근무시간 모니터링', icon: '⏰', path: '/admin/experts/working-hours', minLevel: 'center_manager' }
+      ]
+    },
     {
       id: 'approval',
       label: '승인 관리',
       icon: '✅',
       path: '/admin/approval',
+      minLevel: 'staff', // 🎯 통일: adminOnly → minLevel
       children: [
-        { id: 'expert-approval', label: '전문가 승인', icon: '👨‍⚕️', path: '/admin/approval/experts', badge: pendingExpertsCount > 0 ? pendingExpertsCount : undefined }
+        { id: 'expert-approval', label: '전문가 승인', icon: '👨‍⚕️', path: '/admin/approval/experts', badge: pendingExpertsCount > 0 ? pendingExpertsCount : undefined, minLevel: 'staff' }
       ]
     },
     {
@@ -114,9 +170,10 @@ const Sidebar: React.FC<SidebarProps> = ({ userType, isCollapsed = false, onTogg
       label: 'CMS 관리',
       icon: '⚙️',
       path: '/admin/cms',
+      minLevel: 'staff', // 🎯 통일: adminOnly → minLevel
       children: [
-        { id: 'survey-editor', label: '설문 문항 편집', icon: '📝', path: '/admin/cms/questions' },
-        { id: 'logic-editor', label: '분기 로직 편집', icon: '🔀', path: '/admin/cms/logic' }
+        { id: 'survey-editor', label: '설문 문항 편집', icon: '📝', path: '/admin/cms/questions', minLevel: 'staff' },
+        { id: 'logic-editor', label: '분기 로직 편집', icon: '🔀', path: '/admin/cms/logic', minLevel: 'staff' }
       ]
     },
     {
@@ -124,9 +181,10 @@ const Sidebar: React.FC<SidebarProps> = ({ userType, isCollapsed = false, onTogg
       label: '제휴 관리',
       icon: '🤝',
       path: '/admin/partnership',
+      minLevel: 'regional_manager', // 🎯 이미 통일됨
       children: [
-        { id: 'hospital-manage', label: '병원 등록/수정', icon: '🏥', path: '/admin/partnership/hospitals' },
-        { id: 'test-items', label: '검사 항목 등록/수정', icon: '🧪', path: '/admin/partnership/tests' }
+        { id: 'hospital-manage', label: '병원 등록/수정', icon: '🏥', path: '/admin/partnership/hospitals', minLevel: 'regional_manager' },
+        { id: 'test-items', label: '검사 항목 등록/수정', icon: '🧪', path: '/admin/partnership/tests', minLevel: 'regional_manager' }
       ]
     },
     {
@@ -134,9 +192,11 @@ const Sidebar: React.FC<SidebarProps> = ({ userType, isCollapsed = false, onTogg
       label: '통계 관리',
       icon: '📊',
       path: '/admin/statistics',
+      minLevel: 'staff', // 🎯 통일: adminOnly → minLevel
       children: [
-        { id: 'payment-history', label: '결제 내역', icon: '💳', path: '/admin/statistics/payments' },
-        { id: 'revenue-stats', label: '매출 통계', icon: '💰', path: '/admin/statistics/revenue' }
+        { id: 'payment-history', label: '결제 내역', icon: '💳', path: '/admin/statistics/payments', minLevel: 'center_manager' }, // 🎯 통일
+        { id: 'revenue-stats', label: '매출 통계', icon: '💰', path: '/admin/statistics/revenue', minLevel: 'center_manager' }, // 🎯 통일
+        { id: 'regional-stats', label: '지역별 통계', icon: '🗺️', path: '/admin/statistics/regional', minLevel: 'regional_manager' }
       ]
     },
     {
@@ -144,20 +204,134 @@ const Sidebar: React.FC<SidebarProps> = ({ userType, isCollapsed = false, onTogg
       label: '시스템',
       icon: '🖥️',
       path: '/admin/system',
+      minLevel: 'staff', // 🎯 통일: adminOnly → minLevel
       children: [
-        { id: 'operation-log', label: '운영 로그', icon: '📋', path: '/admin/system/logs' },
-        { id: 'user-management', label: '전체 사용자 목록', icon: '👥', path: '/admin/system/users' },
-        { id: 'expert-management', label: '상담사 목록', icon: '👨‍⚕️', path: '/admin/system/experts' },
-        { id: 'notification-settings', label: '알림 템플릿 관리', icon: '🔔', path: '/admin/system/notifications' },
-        { id: 'log-management', label: '사용자 활동 로그', icon: '📊', path: '/admin/system/activity-logs' },
-        { id: 'settings', label: '운영 기본 설정', icon: '⚙️', path: '/admin/system/settings' },
-        { id: 'permissions', label: '관리자 권한 설정', icon: '🔐', path: '/admin/system/permissions' },
-        { id: 'password-change', label: '비밀번호 변경', icon: '🔑', path: '/admin/system/password' }
+        { id: 'operation-log', label: '운영 로그', icon: '📋', path: '/admin/system/logs', minLevel: 'staff' }, // 🎯 통일
+        { id: 'user-management', label: '전체 사용자 목록', icon: '👥', path: '/admin/system/users', minLevel: 'center_manager' }, // 🎯 통일
+        { id: 'expert-management', label: '상담사 목록', icon: '👨‍⚕️', path: '/admin/system/experts', minLevel: 'center_manager' }, // 🎯 통일
+        { id: 'notification-settings', label: '알림 템플릿 관리', icon: '🔔', path: '/admin/system/notifications', minLevel: 'regional_manager' },
+        { id: 'log-management', label: '사용자 활동 로그', icon: '📊', path: '/admin/system/activity-logs', minLevel: 'regional_manager' },
+        { id: 'settings', label: '운영 기본 설정', icon: '⚙️', path: '/admin/system/settings', minLevel: 'super_admin' }, // 🎯 통일
+        { id: 'admin-permissions', label: '관리자 권한 설정', icon: '🔐', path: '/admin/system/permissions', minLevel: 'super_admin' }, // 🎯 통일
+        { id: 'password-change', label: '비밀번호 변경', icon: '🔑', path: '/admin/system/password', minLevel: 'staff' } // 🎯 통일
+      ]
+    },
+    // 🎯 수퍼관리자 전용 기능 (3단계 확장)
+    {
+      id: 'super-admin',
+      label: '최고 관리자',
+      icon: '👑',
+      path: '/admin/super-admin',
+      minLevel: 'super_admin',
+      children: [
+        { id: 'global-dashboard', label: '전체 시스템 현황', icon: '🌐', path: '/admin/super-admin/global-dashboard', minLevel: 'super_admin' },
+        { id: 'admin-accounts', label: '관리자 계정 관리', icon: '👤', path: '/admin/super-admin/admin-accounts', minLevel: 'super_admin' },
+        { id: 'global-settings', label: '글로벌 시스템 설정', icon: '🔧', path: '/admin/super-admin/global-settings', minLevel: 'super_admin' },
+        { id: 'security-policy', label: '보안 정책 관리', icon: '🔒', path: '/admin/super-admin/security-policy', minLevel: 'super_admin' },
+        { id: 'system-monitoring', label: '시스템 모니터링', icon: '📈', path: '/admin/super-admin/system-monitoring', minLevel: 'super_admin' },
+        { id: 'backup-restore', label: '백업 및 복원', icon: '💾', path: '/admin/super-admin/backup-restore', minLevel: 'super_admin' },
+        { id: 'audit-trails', label: '감사 추적', icon: '🔍', path: '/admin/super-admin/audit-trails', minLevel: 'super_admin' }
       ]
     }
   ];
 
-  const menus = userType === 'expert' ? expertMenus : adminMenus;
+  // 권한에 따른 메뉴 필터링 (통일된 권한 체계 사용)
+  const filterMenusByPermission = (menus: MenuItem[], userType: UserType): MenuItem[] => {
+    return menus.filter(menu => {
+      // 🎯 수퍼관리자 우선 처리 - 모든 메뉴에 접근 가능
+      if (userType === 'super_admin') {
+        // 서브메뉴만 필터링하고 부모는 항상 유지
+        if (menu.children) {
+          menu.children = filterMenusByPermission(menu.children, userType);
+        }
+        return true;
+      }
+      
+      // 🎯 통일된 권한 체크 - minLevel만 사용
+      if (menu.minLevel && !hasMinPermissionLevel(userType, menu.minLevel)) {
+        return false;
+      }
+      
+      // 🎯 레거시 속성 지원 (하위 호환성)
+      if (menu.adminOnly && !isAdmin(userType)) return false;
+      if (menu.centerManagerOnly && !hasMinPermissionLevel(userType, 'center_manager')) return false;
+      if (menu.superAdminOnly && userType !== 'super_admin') return false;
+      
+      // 서브메뉴 필터링
+      if (menu.children) {
+        menu.children = filterMenusByPermission(menu.children, userType);
+        
+        // 🎯 부모 메뉴 접근 권한 체크 (통일된 방식)
+        const hasParentAccess = !menu.minLevel || hasMinPermissionLevel(userType, menu.minLevel);
+        
+        // 🎯 레거시 권한도 체크
+        const hasLegacyAccess = (
+          (menu.adminOnly && isAdmin(userType)) ||
+          (menu.centerManagerOnly && hasMinPermissionLevel(userType, 'center_manager')) ||
+          (menu.superAdminOnly && userType === 'super_admin')
+        );
+        
+        // 부모 메뉴에 접근 권한이 있으면 서브메뉴가 없어도 유지
+        if (menu.children.length === 0 && !hasParentAccess && !hasLegacyAccess) {
+          return false;
+        }
+      }
+      
+      return true;
+    });
+  };
+
+  // 메뉴 선택 및 폴백 처리
+  let menus: MenuItem[] = [];
+  
+  if (userType === 'expert') {
+    menus = expertMenus;
+  } else {
+    menus = filterMenusByPermission(adminMenus, userType);
+    
+    // 🎯 디버깅 로그 (통일된 권한 체계)
+    console.log('메뉴 필터링 결과:', {
+      userType,
+      originalMenuCount: adminMenus.length,
+      filteredMenuCount: menus.length,
+      menuIds: menus.map(m => m.id),
+      permissionLevels: {
+        hasStaffLevel: hasMinPermissionLevel(userType, 'staff'),
+        hasCenterManagerLevel: hasMinPermissionLevel(userType, 'center_manager'),
+        hasRegionalManagerLevel: hasMinPermissionLevel(userType, 'regional_manager'),
+        isSuperAdmin: userType === 'super_admin'
+      }
+    });
+    
+    // 🎯 수퍼관리자 안전장치: 메뉴가 비어있으면 기본 메뉴라도 제공
+    if (menus.length === 0 && userType === 'super_admin') {
+      console.warn('수퍼관리자 메뉴가 비어있음, 기본 메뉴 제공');
+      menus = [
+        {
+          id: 'dashboard',
+          label: '대시보드',
+          icon: '🏠',
+          path: '/admin/dashboard'
+        },
+        {
+          id: 'centers',
+          label: '센터 관리',
+          icon: '🏢',
+          path: '/admin/centers/list'
+        },
+        {
+          id: 'system',
+          label: '시스템 관리',
+          icon: '🖥️',
+          path: '/admin/system',
+          children: [
+            { id: 'users', label: '사용자 관리', icon: '👥', path: '/admin/system/users' },
+            { id: 'settings', label: '설정', icon: '⚙️', path: '/admin/system/settings' }
+          ]
+        }
+      ];
+    }
+  }
 
   const toggleMenu = (menuId: string) => {
     setExpandedMenus(prev => 
@@ -209,8 +383,11 @@ const Sidebar: React.FC<SidebarProps> = ({ userType, isCollapsed = false, onTogg
         <div className="flex items-center justify-between">
           {!isCollapsed && (
             <div>
-              <h1 className="text-h3 font-bold text-white">ExpertLink</h1>
-              <p className="text-caption text-secondary-200 mt-1">
+              <div className="flex items-center gap-2 mb-2">
+                <h1 className="text-h3 font-bold text-white">ExpertLink</h1>
+                {isAdmin(userType) && <AdminLevelBadge userType={userType} size="sm" />}
+              </div>
+              <p className="text-caption text-secondary-200">
                 {userType === 'expert' ? '전문가 대시보드' : '관리자 패널'}
               </p>
             </div>

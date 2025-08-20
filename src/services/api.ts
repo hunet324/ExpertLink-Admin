@@ -101,6 +101,19 @@ export class ApiClient {
     if (accessToken) {
       headers.Authorization = `Bearer ${accessToken}`;
       console.log('Authorization 헤더 설정됨:', headers.Authorization.substring(0, 30) + '...');
+      
+      // 토큰에서 사용자 정보 추출하여 센터 정보 헤더 추가
+      try {
+        const payload = JSON.parse(atob(accessToken.split('.')[1]));
+        if (payload.center_id) {
+          headers['X-Center-Id'] = payload.center_id.toString();
+        }
+        if (payload.user_type) {
+          headers['X-User-Type'] = payload.user_type;
+        }
+      } catch (e) {
+        console.warn('토큰에서 사용자 정보 추출 실패:', e);
+      }
     }
 
     // 추가 헤더 병합 (Authorization 헤더가 덮어씌워지지 않도록 주의)

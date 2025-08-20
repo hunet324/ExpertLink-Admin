@@ -1,13 +1,20 @@
 import { create } from 'zustand';
 import { devtools, persist } from 'zustand/middleware';
-import { User } from '@/types/user';
+import { User, Center, Permission } from '@/types/user';
 import { AuthState, LoginDto, RegisterDto } from '@/types/auth';
 import { authService } from '@/services/auth';
 import { tokenManager } from '@/services/api';
+import { generateUserPermissions } from '@/utils/permissions';
 
 interface AppState extends AuthState {
   // UI 상태
   theme: 'light' | 'dark';
+  
+  // 센터 및 권한 상태
+  currentCenter: Center | null;
+  managedCenters: Center[];
+  userPermissions: Permission | null;
+  selectedCenterId: number | null;
   
   // 관리자 상태
   pendingExpertsCount: number;
@@ -29,6 +36,12 @@ interface AppState extends AuthState {
   // UI 액션
   setLoading: (loading: boolean) => void;
   toggleTheme: () => void;
+  
+  // 센터 및 권한 액션
+  setCurrentCenter: (center: Center | null) => void;
+  setManagedCenters: (centers: Center[]) => void;
+  updateUserPermissions: () => void;
+  setSelectedCenterId: (centerId: number | null) => void;
   
   // 관리자 액션
   setPendingExpertsCount: (count: number) => void;
@@ -74,6 +87,13 @@ export const useStore = create<AppState>()(
           ...initialTokenState,
           isLoading: false,
           theme: 'light',
+          
+          // 센터 및 권한 초기 상태
+          currentCenter: null,
+          managedCenters: [],
+          userPermissions: null,
+          selectedCenterId: null,
+          
           pendingExpertsCount: 0,
 
           // 인증 액션
@@ -257,9 +277,18 @@ export const useStore = create<AppState>()(
 
           // 사용자 액션
           setUser: (user: User) => {
+            const userType = user.user_type || user.userType;
+            const centerId = user.center_id || user.centerId;
+            const supervisorId = user.supervisor_id || user.supervisorId;
+            
+            // 권한 정보 자동 생성
+            const permissions = userType ? generateUserPermissions(userType, centerId, supervisorId) : null;
+            
             set({ 
               user, 
-              isAuthenticated: true 
+              isAuthenticated: true,
+              userPermissions: permissions,
+              selectedCenterId: centerId || null
             });
           },
 
@@ -321,6 +350,34 @@ export const useStore = create<AppState>()(
             set((state) => ({ 
               pendingExpertsCount: Math.max(0, state.pendingExpertsCount - 1) 
             }));
+          },
+
+          // 센터 및 권한 액션
+          setCurrentCenter: (center: Center | null) => {
+            set({ currentCenter: center });
+          },
+
+          setManagedCenters: (centers: Center[]) => {
+            set({ managedCenters: centers });
+          },
+
+          updateUserPermissions: () => {
+            const state = get();
+            const user = state.user;
+            if (user) {
+              const userType = user.user_type || user.userType;
+              const centerId = user.center_id || user.centerId;
+              const supervisorId = user.supervisor_id || user.supervisorId;
+              
+              if (userType) {
+                const permissions = generateUserPermissions(userType, centerId, supervisorId);
+                set({ userPermissions: permissions });
+              }
+            }
+          },
+
+          setSelectedCenterId: (centerId: number | null) => {
+            set({ selectedCenterId: centerId });
           },
         };
       },

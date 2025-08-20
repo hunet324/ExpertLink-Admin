@@ -165,7 +165,12 @@ export class AuthService {
     console.log('getUserTypeRedirectPath 호출됨:', userType);
     
     switch (userType) {
-      case 'admin':
+      case 'super_admin':
+      case 'regional_manager':
+      case 'center_manager':
+      case 'staff':
+        return '/admin/dashboard';
+      case 'admin': // 기존 호환성
         return '/admin/dashboard';
       case 'expert':
         return '/expert/dashboard';
