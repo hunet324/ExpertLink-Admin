@@ -6,7 +6,7 @@ import { useStore } from '@/store/useStore';
 import { User, UserType } from '@/types/user';
 import { withSuperAdminOnly } from '@/components/withPermission';
 import AdminLevelBadge from '@/components/AdminLevelBadge';
-import { getAdminLevelText, getPermissionLevelColor, hasMinPermissionLevel } from '@/utils/permissions';
+import { getAdminLevelText, getPermissionLevelColor, hasMinPermissionLevel, getUserType } from '@/utils/permissions';
 
 interface AdminAccount extends User {
   lastLogin?: string;
@@ -42,7 +42,7 @@ const AdminAccountsPage: React.FC = () => {
     confirmPassword: ''
   });
 
-  const userType = user?.user_type || user?.userType;
+  const userType = getUserType(user);
 
   // 관리자 계정 목록 조회
   useEffect(() => {
@@ -61,6 +61,7 @@ const AdminAccountsPage: React.FC = () => {
             center_name: '강남센터',
             lastLogin: '2024-08-19T09:30:00Z',
             loginCount: 245,
+            status: 'active',
             accountStatus: 'active',
             createdBy: 0,
             createdByName: 'System',
@@ -75,6 +76,7 @@ const AdminAccountsPage: React.FC = () => {
             center_name: '부산센터',
             lastLogin: '2024-08-18T16:45:00Z',
             loginCount: 156,
+            status: 'active',
             accountStatus: 'active',
             createdBy: 1,
             createdByName: '김관리',
@@ -89,6 +91,7 @@ const AdminAccountsPage: React.FC = () => {
             center_name: '강남센터',
             lastLogin: '2024-08-19T08:15:00Z',
             loginCount: 89,
+            status: 'active',
             accountStatus: 'active',
             createdBy: 2,
             createdByName: '박센터',
@@ -103,6 +106,7 @@ const AdminAccountsPage: React.FC = () => {
             center_name: '대구센터',
             lastLogin: undefined,
             loginCount: 0,
+            status: 'pending',
             accountStatus: 'pending',
             createdBy: 1,
             createdByName: '김관리',

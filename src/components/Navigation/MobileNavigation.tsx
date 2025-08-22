@@ -35,7 +35,7 @@ const MobileNavigation: React.FC<MobileNavigationProps> = ({ userType, isOpen, o
   // 권한에 따른 메뉴 필터링
   const filterMenusByPermission = (menus: MenuItem[]): MenuItem[] => {
     return menus.filter(menu => {
-      if (userType === 'super_admin') {
+      if (userType === ('super_admin' as any)) {
         if (menu.children) {
           menu.children = filterMenusByPermission(menu.children);
         }
@@ -48,7 +48,7 @@ const MobileNavigation: React.FC<MobileNavigationProps> = ({ userType, isOpen, o
       
       if (menu.adminOnly && !isAdmin(userType)) return false;
       if (menu.centerManagerOnly && !hasMinPermissionLevel(userType, 'center_manager')) return false;
-      if (menu.superAdminOnly && userType !== 'super_admin') return false;
+      if (menu.superAdminOnly && userType !== ('super_admin' as any)) return false;
       
       if (menu.children) {
         menu.children = filterMenusByPermission(menu.children);

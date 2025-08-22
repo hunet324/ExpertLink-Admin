@@ -62,17 +62,6 @@ const ResponsiveHeader: React.FC<ResponsiveHeaderProps> = ({
               >
                 <span className="text-xl">☰</span>
               </button>
-
-              {/* 로고 및 타이틀 */}
-              <Link href="/admin/dashboard" className="flex items-center gap-3">
-                <div className="text-2xl">🔗</div>
-                <div className="hidden sm:block">
-                  <h1 className="text-lg font-bold text-gray-900">ExpertLink</h1>
-                  <div className="flex items-center gap-2">
-                    <AdminLevelBadge userType={userType} size="xs" />
-                  </div>
-                </div>
-              </Link>
             </div>
 
             {/* 가운데: 페이지 제목 (데스크톱에서만) */}

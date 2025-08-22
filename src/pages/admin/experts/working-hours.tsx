@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useStore } from '@/store/useStore';
 import { centerService, CenterExpertResponse, WorkingHoursResponse } from '@/services/center';
 import { withCenterManagerOnly } from '@/components/withPermission';
+import { getUserType } from '@/utils/permissions';
 import AdminLevelBadge from '@/components/AdminLevelBadge';
 import CenterSelector from '@/components/CenterSelector';
 
@@ -29,7 +30,7 @@ const ExpertWorkingHoursPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>('');
 
-  const userType = user?.user_type || user?.userType;
+  const userType = getUserType(user);
 
   // 센터별 전문가 목록 조회
   useEffect(() => {
@@ -167,7 +168,7 @@ const ExpertWorkingHoursPage: React.FC = () => {
               <label className="block text-sm font-medium text-gray-700 mb-2">센터</label>
               <CenterSelector
                 userType={userType}
-                currentCenterId={selectedCenterId}
+                currentCenterId={selectedCenterId ?? undefined}
                 onCenterChange={setSelectedCenterId}
                 placeholder="센터를 선택하세요"
               />

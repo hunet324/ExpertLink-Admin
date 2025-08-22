@@ -4,10 +4,12 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
 import { useStore } from '@/store/useStore';
-import { centerService, CenterExpertResponse, VacationRequest } from '@/services/center';
+import { centerService, CenterExpertResponse } from '@/services/center';
+import { vacationService, VacationRecord as APIVacationRecord, CreateVacationRequest } from '@/services/vacation';
 import { withCenterManagerOnly } from '@/components/withPermission';
 import AdminLevelBadge from '@/components/AdminLevelBadge';
 import CenterSelector from '@/components/CenterSelector';
+import { getUserType } from '@/utils/permissions';
 
 interface VacationRecord {
   id: number;
@@ -16,7 +18,7 @@ interface VacationRecord {
   startDate: string;
   endDate: string;
   reason: string;
-  status: 'pending' | 'approved' | 'rejected';
+  status: 'pending' | 'approved' | 'rejected' | 'cancelled';
   requestedAt: string;
   approvedBy?: number;
   approvedAt?: string;
@@ -42,7 +44,7 @@ const ExpertVacationPage: React.FC = () => {
     reason: ''
   });
 
-  const userType = user?.user_type || user?.userType;
+  const userType = getUserType(user);
 
   // 전문가 목록 조회
   useEffect(() => {
@@ -54,20 +56,28 @@ const ExpertVacationPage: React.FC = () => {
         const expertList = await centerService.getCenterExperts(selectedCenterId);
         setExperts(expertList);
         
-        // 휴가 기록도 함께 조회 (실제로는 별도 API 필요)
-        const mockVacations: VacationRecord[] = expertList.map((expert, index) => ({
-          id: index + 1,
-          expertId: expert.id,
-          expertName: expert.name,
-          startDate: '2024-03-01',
-          endDate: '2024-03-05',
-          reason: '개인 사정',
-          status: index % 3 === 0 ? 'approved' : index % 3 === 1 ? 'pending' : 'rejected',
-          requestedAt: '2024-02-20T09:00:00Z',
-          approvedBy: 1,
-          approvedAt: '2024-02-21T10:00:00Z'
-        }));
-        setVacationRecords(mockVacations);
+        // 휴가 기록 조회 - 실제 API 호출
+        try {
+          const vacationResponse = await vacationService.getVacations({ center_id: selectedCenterId });
+          // API 응답을 UI 인터페이스에 맞게 변환
+          const transformedVacations: VacationRecord[] = vacationResponse.vacations.map(vacation => ({
+            id: vacation.id,
+            expertId: vacation.expert_id,
+            expertName: vacation.expert_name || '',
+            startDate: vacation.start_date,
+            endDate: vacation.end_date,
+            reason: vacation.reason,
+            status: vacation.status,
+            requestedAt: vacation.created_at,
+            approvedBy: vacation.approved_by,
+            approvedAt: vacation.approved_at
+          }));
+          setVacationRecords(transformedVacations);
+        } catch (vacationError) {
+          console.error('휴가 기록 조회 실패:', vacationError);
+          // 휴가 조회 실패해도 전문가 목록은 표시
+          setVacationRecords([]);
+        }
         
         setError('');
       } catch (err: any) {
@@ -81,27 +91,93 @@ const ExpertVacationPage: React.FC = () => {
     fetchExperts();
   }, [selectedCenterId]);
 
+  // 휴가 승인/거부 처리
+  const handleVacationAction = async (vacationId: number, action: 'approve' | 'reject', reason?: string) => {
+    try {
+      setError('');
+      
+      // 실제 API 호출
+      let updatedVacation: VacationRecord;
+      if (action === 'approve') {
+        const result = await vacationService.approveVacation(vacationId);
+        updatedVacation = {
+          id: result.id,
+          expertId: result.expert_id,
+          expertName: result.expert_name || '',
+          startDate: result.start_date,
+          endDate: result.end_date,
+          reason: result.reason,
+          status: result.status,
+          requestedAt: result.created_at,
+          approvedBy: result.approved_by,
+          approvedAt: result.approved_at
+        };
+      } else {
+        const result = await vacationService.rejectVacation(vacationId, reason || '');
+        updatedVacation = {
+          id: result.id,
+          expertId: result.expert_id,
+          expertName: result.expert_name || '',
+          startDate: result.start_date,
+          endDate: result.end_date,
+          reason: result.reason,
+          status: result.status,
+          requestedAt: result.created_at,
+          approvedBy: result.approved_by,
+          approvedAt: result.approved_at
+        };
+      }
+      
+      // UI 상태 업데이트
+      setVacationRecords(prev => prev.map(vacation => 
+        vacation.id === vacationId ? updatedVacation : vacation
+      ));
+      
+      alert(`휴가 신청이 ${action === 'approve' ? '승인' : '거부'}되었습니다.`);
+    } catch (error: any) {
+      console.error('휴가 상태 변경 실패:', error);
+      setError(error.message || '휴가 상태 변경 중 오류가 발생했습니다.');
+    }
+  };
+
   // 휴가 신청
   const handleVacationSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedExpert) return;
 
     try {
-      const vacationData: VacationRequest = {
-        expertId: selectedExpert,
-        startDate: vacationForm.startDate,
-        endDate: vacationForm.endDate,
+      const vacationData: CreateVacationRequest = {
+        expert_id: selectedExpert,
+        start_date: vacationForm.startDate,
+        end_date: vacationForm.endDate,
         reason: vacationForm.reason
       };
 
-      await centerService.setExpertVacation(vacationData);
+      await vacationService.createVacation(vacationData);
       
       // 성공 후 폼 리셋 및 목록 새로고침
       setVacationForm({ startDate: '', endDate: '', reason: '' });
       setSelectedExpert(null);
       setShowVacationForm(false);
       
-      // 실제로는 휴가 목록 새로고침 API 호출
+      // 휴가 목록 새로고침
+      if (selectedCenterId) {
+        const vacationResponse = await vacationService.getVacations({ center_id: selectedCenterId });
+        const transformedVacations: VacationRecord[] = vacationResponse.vacations.map(vacation => ({
+          id: vacation.id,
+          expertId: vacation.expert_id,
+          expertName: vacation.expert_name || '',
+          startDate: vacation.start_date,
+          endDate: vacation.end_date,
+          reason: vacation.reason,
+          status: vacation.status,
+          requestedAt: vacation.created_at,
+          approvedBy: vacation.approved_by,
+          approvedAt: vacation.approved_at
+        }));
+        setVacationRecords(transformedVacations);
+      }
+      
       alert('휴가가 성공적으로 설정되었습니다.');
     } catch (err: any) {
       console.error('휴가 설정 실패:', err);
@@ -114,6 +190,7 @@ const ExpertVacationPage: React.FC = () => {
       case 'approved': return 'bg-green-100 text-green-800';
       case 'pending': return 'bg-yellow-100 text-yellow-800';
       case 'rejected': return 'bg-red-100 text-red-800';
+      case 'cancelled': return 'bg-gray-100 text-gray-800';
       default: return 'bg-gray-100 text-gray-800';
     }
   };
@@ -123,6 +200,7 @@ const ExpertVacationPage: React.FC = () => {
       case 'approved': return '승인됨';
       case 'pending': return '승인대기';
       case 'rejected': return '거부됨';
+      case 'cancelled': return '취소됨';
       default: return '알 수 없음';
     }
   };
@@ -176,7 +254,7 @@ const ExpertVacationPage: React.FC = () => {
           <div className="max-w-md">
             <CenterSelector
               userType={userType}
-              currentCenterId={selectedCenterId}
+              currentCenterId={selectedCenterId ?? undefined}
               onCenterChange={setSelectedCenterId}
               placeholder="센터를 선택하세요"
             />
@@ -376,19 +454,31 @@ const ExpertVacationPage: React.FC = () => {
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                             <div className="flex items-center gap-2">
-                              {record.status === 'pending' && (
+                              {record.status === 'pending' && (userType === 'super_admin' || userType === 'center_manager') && (
                                 <>
-                                  <button className="text-green-600 hover:text-green-900">
+                                  <button 
+                                    onClick={() => handleVacationAction(record.id, 'approve')}
+                                    className="text-green-600 hover:text-green-900"
+                                  >
                                     승인
                                   </button>
-                                  <button className="text-red-600 hover:text-red-900">
+                                  <button 
+                                    onClick={() => {
+                                      const reason = prompt('거부 사유를 입력하세요:');
+                                      if (reason) handleVacationAction(record.id, 'reject', reason);
+                                    }}
+                                    className="text-red-600 hover:text-red-900"
+                                  >
                                     거부
                                   </button>
                                 </>
                               )}
-                              <button className="text-blue-600 hover:text-blue-900">
+                              <Link
+                                href={`/admin/experts/${record.expertId}/vacation`}
+                                className="text-blue-600 hover:text-blue-900"
+                              >
                                 상세
-                              </button>
+                              </Link>
                             </div>
                           </td>
                         </tr>

@@ -62,6 +62,7 @@ export interface ProfileResponseDto extends User {
 export interface Center {
   id: number;
   name: string;
+  code?: string;
   address?: string;
   phone?: string;
   managerId?: number;
@@ -70,6 +71,8 @@ export interface Center {
   parent_center_id?: number;
   regionId?: number;
   region_id?: number;
+  isActive?: boolean;
+  is_active?: boolean;
   createdAt?: string;
   created_at?: string;
 }

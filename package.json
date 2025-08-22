@@ -3,7 +3,8 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev -H 0.0.0.0",
+    "dev:local": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint ."
@@ -15,6 +16,7 @@
     "zustand": "^5.0.7"
   },
   "devDependencies": {
+    "@eslint/eslintrc": "^3.3.1",
     "@types/node": "24.2.0",
     "@types/react": "latest",
     "@types/react-dom": "latest",

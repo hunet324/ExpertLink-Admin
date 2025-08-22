@@ -6,6 +6,8 @@ import { ApiError } from '@/types/auth';
 import { useStore } from '@/store/useStore';
 import { tokenManager } from '@/services/api';
 import { authService } from '@/services/auth';
+import { withAdminOnly } from '@/components/withPermission';
+import { getUserType } from '@/utils/permissions';
 
 type StatusFilter = 'all' | 'pending' | 'under_review' | 'approved' | 'rejected';
 
@@ -19,25 +21,15 @@ const ExpertApprovalPage: React.FC = () => {
   const [error, setError] = useState<string>('');
   const [initialized, setInitialized] = useState(false);
 
-  // 단순화된 초기화 - 한 번만 실행
+  const userType = getUserType(user);
+
+  // 페이지 초기화 - HOC에서 권한 체크를 하므로 단순화
   useEffect(() => {
     if (initialized) return;
     
     console.log('=== 페이지 초기화 ===');
     
-    // 기본 인증 체크
-    if (!isAuthenticated || !user) {
-      router.replace('/login');
-      return;
-    }
-    
-    if (user.userType !== 'admin') {
-      alert('관리자 권한이 필요합니다.');
-      router.replace('/login');
-      return;
-    }
-    
-    // 데이터 로드
+    // 데이터 로드 (권한 체크는 HOC에서 처리)
     loadExpertApplications();
     setInitialized(true);
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -193,7 +185,7 @@ const ExpertApprovalPage: React.FC = () => {
   return (
     <div className="flex h-screen bg-background-50">
       <Sidebar 
-        userType="admin" 
+        userType={userType} 
         isCollapsed={sidebarCollapsed}
         onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
       />
@@ -335,4 +327,4 @@ const ExpertApprovalPage: React.FC = () => {
   );
 };
 
-export default ExpertApprovalPage;
+export default withAdminOnly(ExpertApprovalPage, false); // 레이아웃 비활성화 - 페이지에서 직접 처리

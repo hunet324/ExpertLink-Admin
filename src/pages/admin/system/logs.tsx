@@ -9,7 +9,7 @@ interface SystemLog {
   category: 'auth' | 'payment' | 'system' | 'user' | 'expert' | 'admin' | 'api' | 'database';
   action: string;
   userId?: string;
-  userType?: 'client' | 'expert' | 'admin';
+  userType?: 'client' | 'expert' | 'admin' | 'super_admin';
   userName?: string;
   ipAddress: string;
   userAgent: string;
@@ -132,7 +132,7 @@ const SystemLogsPage: React.FC = () => {
       category: 'admin',
       action: 'ADMIN_LOGIN',
       userId: 'admin_001',
-      userType: 'admin',
+      userType: 'super_admin',
       userName: '김관리자',
       ipAddress: '192.168.1.200',
       userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
@@ -269,7 +269,7 @@ const SystemLogsPage: React.FC = () => {
     <div className="flex h-screen bg-background-50">
       {/* 사이드바 */}
       <Sidebar 
-        userType="admin" 
+        userType="super_admin" 
         isCollapsed={sidebarCollapsed}
         onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
       />

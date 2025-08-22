@@ -8,6 +8,7 @@ import { centerService } from '@/services/center';
 import { withCenterManagerOnly } from '@/components/withPermission';
 import AdminLevelBadge from '@/components/AdminLevelBadge';
 import CenterSelector from '@/components/CenterSelector';
+import { getUserType } from '@/utils/permissions';
 
 const CenterListPage: React.FC = () => {
   const { user } = useStore();
@@ -16,7 +17,7 @@ const CenterListPage: React.FC = () => {
   const [error, setError] = useState<string>('');
   const [selectedCenterId, setSelectedCenterId] = useState<number | null>(null);
 
-  const userType = user?.user_type || user?.userType;
+  const userType = getUserType(user);
   const isSuperAdmin = userType === 'super_admin';
 
   // 센터 목록 조회
@@ -50,7 +51,7 @@ const CenterListPage: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
+    <div className="p-6">
       <div className="max-w-7xl mx-auto">
         {/* 헤더 */}
         <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
@@ -80,7 +81,7 @@ const CenterListPage: React.FC = () => {
             <div className="max-w-md">
               <CenterSelector
                 userType={userType}
-                currentCenterId={selectedCenterId}
+                currentCenterId={selectedCenterId ?? undefined}
                 onCenterChange={setSelectedCenterId}
                 showAllOption={true}
                 placeholder="모든 센터"

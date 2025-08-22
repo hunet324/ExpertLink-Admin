@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useStore } from '@/store/useStore';
 import { withSuperAdminOnly } from '@/components/withPermission';
 import AdminLevelBadge from '@/components/AdminLevelBadge';
+import { getUserType } from '@/utils/permissions';
 
 interface GlobalSettings {
   systemName: string;
@@ -50,7 +51,7 @@ const GlobalSettingsPage: React.FC = () => {
   const [error, setError] = useState<string>('');
   const [successMessage, setSuccessMessage] = useState<string>('');
 
-  const userType = user?.user_type || user?.userType;
+  const userType = getUserType(user);
 
   // 글로벌 설정 조회
   useEffect(() => {

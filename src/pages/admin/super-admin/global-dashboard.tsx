@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useStore } from '@/store/useStore';
 import { withSuperAdminOnly } from '@/components/withPermission';
 import AdminLevelBadge from '@/components/AdminLevelBadge';
+import { getUserType } from '@/utils/permissions';
 
 interface GlobalSystemStats {
   totalUsers: number;
@@ -53,7 +54,7 @@ const GlobalDashboardPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
 
-  const userType = user?.user_type || user?.userType;
+  const userType = getUserType(user);
 
   // 전체 시스템 통계 조회
   useEffect(() => {

@@ -1,25 +1,36 @@
 // 권한 체크 유틸리티 함수들
 
-import { UserType, AdminLevel, PermissionLevel, Permission, PermissionContext } from '@/types/user';
+import { UserType, AdminLevel, PermissionLevel, Permission, PermissionContext, User } from '@/types/user';
+
+/**
+ * User 객체에서 UserType을 안전하게 추출하는 유틸리티 함수
+ */
+export function getUserType(user: User | null | undefined): UserType | null {
+  if (!user) return null;
+  return user.userType || user.user_type || null;
+}
 
 /**
  * 사용자 타입을 권한 레벨로 변환
  */
-export function getUserPermissionLevel(userType: UserType): number {
+export function getUserPermissionLevel(userType: UserType | null): number {
+  if (!userType) return 0;
   return PermissionLevel[userType.toUpperCase() as keyof typeof PermissionLevel] || 0;
 }
 
 /**
  * 관리자 권한인지 확인
  */
-export function isAdmin(userType: UserType): boolean {
+export function isAdmin(userType: UserType | null): boolean {
+  if (!userType) return false;
   return ['staff', 'center_manager', 'regional_manager', 'super_admin'].includes(userType);
 }
 
 /**
  * 최소 권한 레벨 확인
  */
-export function hasMinPermissionLevel(userType: UserType, minLevel: UserType): boolean {
+export function hasMinPermissionLevel(userType: UserType | null, minLevel: UserType): boolean {
+  if (!userType) return false;
   const userLevel = getUserPermissionLevel(userType);
   const requiredLevel = getUserPermissionLevel(minLevel);
   return userLevel >= requiredLevel;
@@ -79,7 +90,8 @@ export function canManageUser(
 /**
  * 메뉴 접근 권한 확인
  */
-export function canAccessMenu(userType: UserType, menuPath: string): boolean {
+export function canAccessMenu(userType: UserType | null, menuPath: string): boolean {
+  if (!userType) return false;
   const adminPaths = [
     '/admin/dashboard',
     '/admin/approval',

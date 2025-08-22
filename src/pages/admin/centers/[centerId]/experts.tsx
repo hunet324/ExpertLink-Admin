@@ -5,8 +5,10 @@ import { useRouter } from 'next/router';
 import Link from 'next/link';
 import { useStore } from '@/store/useStore';
 import { centerService, CenterExpertResponse } from '@/services/center';
+import { userService } from '@/services/user';
 import { withCenterManagerOnly } from '@/components/withPermission';
 import AdminLevelBadge from '@/components/AdminLevelBadge';
+import { getUserType } from '@/utils/permissions';
 
 const CenterExpertsPage: React.FC = () => {
   const router = useRouter();
@@ -17,8 +19,15 @@ const CenterExpertsPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
   const [centerName, setCenterName] = useState<string>('');
+  
+  // 전문가 추가 모달 관련
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [availableExperts, setAvailableExperts] = useState<any[]>([]);
+  const [loadingExperts, setLoadingExperts] = useState(false);
+  const [selectedExpertId, setSelectedExpertId] = useState<string>('');
+  const [addingExpert, setAddingExpert] = useState(false);
 
-  const userType = user?.user_type || user?.userType;
+  const userType = getUserType(user);
 
   // 센터별 전문가 목록 조회
   useEffect(() => {
@@ -27,13 +36,20 @@ const CenterExpertsPage: React.FC = () => {
 
       try {
         setLoading(true);
-        const expertList = await centerService.getCenterExperts(parseInt(centerId));
+        
+        // 센터 정보와 전문가 목록 병렬로 조회
+        const [centerInfo, expertList] = await Promise.all([
+          centerService.getCenterById(parseInt(centerId)).catch(() => null),
+          centerService.getCenterExperts(parseInt(centerId))
+        ]);
+        
         setExperts(expertList);
-        setCenterName(`센터 ${centerId}`);
+        setCenterName(centerInfo?.name || `센터 ${centerId}`);
         setError('');
       } catch (err: any) {
         console.error('전문가 목록 조회 실패:', err);
         setError(err.message || '전문가 목록을 불러올 수 없습니다.');
+        setCenterName(`센터 ${centerId}`); // 에러 시 fallback
       } finally {
         setLoading(false);
       }
@@ -41,6 +57,94 @@ const CenterExpertsPage: React.FC = () => {
 
     fetchExperts();
   }, [centerId]);
+
+  // 전문가 추가 가능한 사용자 목록 로드
+  const loadAvailableExperts = async () => {
+    try {
+      setLoadingExperts(true);
+      // expert 타입이면서 center_id가 없거나 현재 센터가 아닌 사용자들 조회
+      const response = await userService.getAllUsers({
+        user_type: 'expert',
+        limit: 100
+      });
+      
+      // center_id가 없는 전문가만 필터링 (아직 센터에 배정되지 않은 전문가)
+      const availableExpertsList = response.users.filter(user => !user.center_id);
+      setAvailableExperts(availableExpertsList);
+    } catch (error) {
+      console.error('전문가 목록 로드 실패:', error);
+      alert('전문가 목록을 불러올 수 없습니다.');
+    } finally {
+      setLoadingExperts(false);
+    }
+  };
+
+  // 전문가 추가 처리
+  const handleAddExpert = async () => {
+    if (!selectedExpertId) {
+      alert('추가할 전문가를 선택해주세요.');
+      return;
+    }
+
+    if (!centerId || Array.isArray(centerId)) {
+      alert('센터 정보가 올바르지 않습니다.');
+      return;
+    }
+
+    try {
+      setAddingExpert(true);
+      
+      // 센터에 전문가 배정 API 호출
+      const result = await centerService.assignExpertToCenter(
+        parseInt(centerId), 
+        parseInt(selectedExpertId)
+      );
+      
+      alert('전문가가 성공적으로 추가되었습니다.');
+      
+      // 전문가 목록 새로고침
+      await fetchExperts();
+      
+      setShowAddModal(false);
+      setSelectedExpertId('');
+    } catch (error: any) {
+      console.error('전문가 추가 실패:', error);
+      alert(error.message || '전문가 추가 중 오류가 발생했습니다.');
+    } finally {
+      setAddingExpert(false);
+    }
+  };
+
+  // 모달 열기 시 전문가 목록 로드
+  const handleOpenAddModal = () => {
+    setShowAddModal(true);
+    loadAvailableExperts();
+  };
+
+  // 전문가 목록 새로고침 함수
+  const fetchExperts = async () => {
+    if (!centerId || Array.isArray(centerId)) return;
+
+    try {
+      setLoading(true);
+      
+      // 센터 정보와 전문가 목록 병렬로 조회
+      const [centerInfo, expertList] = await Promise.all([
+        centerService.getCenterById(parseInt(centerId)).catch(() => null),
+        centerService.getCenterExperts(parseInt(centerId))
+      ]);
+      
+      setExperts(expertList);
+      setCenterName(centerInfo?.name || `센터 ${centerId}`);
+      setError('');
+    } catch (err: any) {
+      console.error('전문가 목록 조회 실패:', err);
+      setError(err.message || '전문가 목록을 불러올 수 없습니다.');
+      setCenterName(`센터 ${centerId}`); // 에러 시 fallback
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -104,18 +208,13 @@ const CenterExpertsPage: React.FC = () => {
             </div>
             
             <div className="flex items-center gap-2">
-              <Link
-                href={`/admin/experts/vacation?centerId=${centerId}`}
-                className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg transition-colors"
+              <button
+                onClick={handleOpenAddModal}
+                className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
               >
-                휴가 관리
-              </Link>
-              <Link
-                href={`/admin/experts/schedule?centerId=${centerId}`}
-                className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg transition-colors"
-              >
-                스케줄 관리
-              </Link>
+                <span>➕</span>
+                전문가 추가
+              </button>
             </div>
           </div>
         </div>
@@ -311,6 +410,94 @@ const CenterExpertsPage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* 전문가 추가 모달 */}
+      {showAddModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">전문가 추가</h3>
+              <button
+                onClick={() => {
+                  setShowAddModal(false);
+                  setSelectedExpertId('');
+                }}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  추가할 전문가 선택
+                </label>
+                {loadingExperts ? (
+                  <div className="flex items-center justify-center py-8">
+                    <div className="animate-spin h-6 w-6 border-2 border-blue-500 border-t-transparent rounded-full"></div>
+                    <span className="ml-2 text-gray-600">전문가 목록 로딩 중...</span>
+                  </div>
+                ) : availableExperts.length === 0 ? (
+                  <div className="text-center py-8">
+                    <p className="text-gray-500">추가 가능한 전문가가 없습니다.</p>
+                    <p className="text-sm text-gray-400 mt-1">
+                      전문가 사용자 중 아직 센터에 배정되지 않은 사용자만 표시됩니다.
+                    </p>
+                  </div>
+                ) : (
+                  <select
+                    value={selectedExpertId}
+                    onChange={(e) => setSelectedExpertId(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="">전문가를 선택하세요</option>
+                    {availableExperts.map((expert) => (
+                      <option key={expert.id} value={expert.id}>
+                        {expert.name} ({expert.email})
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                <div className="flex items-start">
+                  <span className="text-blue-500 mr-2">ℹ️</span>
+                  <div>
+                    <p className="text-sm text-blue-800 font-medium">알림</p>
+                    <p className="text-sm text-blue-700">
+                      선택한 전문가가 이 센터에 배정됩니다. 전문가는 해당 센터에서 상담 서비스를 제공할 수 있게 됩니다.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 mt-6">
+              <button
+                onClick={() => {
+                  setShowAddModal(false);
+                  setSelectedExpertId('');
+                }}
+                className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+              >
+                취소
+              </button>
+              <button
+                onClick={handleAddExpert}
+                disabled={!selectedExpertId || addingExpert}
+                className="px-4 py-2 bg-green-500 hover:bg-green-600 disabled:bg-gray-400 text-white rounded-lg transition-colors flex items-center gap-2"
+              >
+                {addingExpert && (
+                  <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full"></div>
+                )}
+                {addingExpert ? '추가 중...' : '전문가 추가'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

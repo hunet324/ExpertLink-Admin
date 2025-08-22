@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useStore } from '@/store/useStore';
 import { withSuperAdminOnly } from '@/components/withPermission';
 import AdminLevelBadge from '@/components/AdminLevelBadge';
+import { getUserType } from '@/utils/permissions';
 
 interface SecurityPolicy {
   id: number;
@@ -39,7 +40,7 @@ const SecurityPolicyPage: React.FC = () => {
   const [error, setError] = useState<string>('');
   const [activeTab, setActiveTab] = useState<'policies' | 'events' | 'settings'>('policies');
 
-  const userType = user?.user_type || user?.userType;
+  const userType = getUserType(user);
 
   // 보안 정책 및 이벤트 조회
   useEffect(() => {

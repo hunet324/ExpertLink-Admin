@@ -23,7 +23,7 @@ interface MenuItem {
 }
 
 interface SidebarProps {
-  userType: UserType;
+  userType: UserType | null;
   isCollapsed?: boolean;
   onToggleCollapse?: () => void;
 }
@@ -32,6 +32,38 @@ const Sidebar: React.FC<SidebarProps> = ({ userType, isCollapsed = false, onTogg
   const router = useRouter();
   const { logout, isLoading, pendingExpertsCount } = useStore();
   const [expandedMenus, setExpandedMenus] = useState<string[]>(['dashboard']);
+
+  // userType이 null인 경우 기본값 처리
+  if (!userType) {
+    return (
+      <div className={`bg-secondary text-white h-screen transition-all duration-smooth ${
+        isCollapsed ? 'w-16' : 'w-64'
+      } flex flex-col shadow-large`}>
+        <div className="p-4 border-b border-secondary-700">
+          <div className="flex items-center justify-between">
+            {!isCollapsed && (
+              <div>
+                <h1 className="text-h3 font-bold text-white">ExpertLink</h1>
+                <p className="text-caption text-secondary-200">로딩 중...</p>
+              </div>
+            )}
+            <button
+              onClick={onToggleCollapse}
+              className="p-2 rounded-lg hover:bg-secondary-600 transition-colors"
+            >
+              <span className="text-lg">{isCollapsed ? '→' : '←'}</span>
+            </button>
+          </div>
+        </div>
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin h-8 w-8 border-2 border-white border-t-transparent rounded-full mx-auto mb-2"></div>
+            <p className="text-secondary-200 text-sm">사용자 정보 로딩 중...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // 전문가용 메뉴
   const expertMenus: MenuItem[] = [
@@ -125,21 +157,7 @@ const Sidebar: React.FC<SidebarProps> = ({ userType, isCollapsed = false, onTogg
       minLevel: 'center_manager', // 🎯 통일: centerManagerOnly → minLevel
       children: [
         { id: 'center-list', label: '센터 목록', icon: '📋', path: '/admin/centers/list', minLevel: 'center_manager' },
-        { id: 'center-staff', label: '센터 직원', icon: '👥', path: '/admin/centers/staff', minLevel: 'center_manager' },
-        { id: 'center-experts', label: '센터 전문가', icon: '👨‍⚕️', path: '/admin/centers/experts', minLevel: 'center_manager' },
         { id: 'center-create', label: '센터 등록', icon: '➕', path: '/admin/centers/create', minLevel: 'super_admin' } // 🎯 통일: superAdminOnly → minLevel
-      ]
-    },
-    {
-      id: 'hierarchy',
-      label: '계층 관리',
-      icon: '🏗️',
-      path: '/admin/hierarchy',
-      minLevel: 'center_manager', // 🎯 통일
-      children: [
-        { id: 'staff-management', label: '직원 관리', icon: '👥', path: '/admin/hierarchy/staff', minLevel: 'center_manager' },
-        { id: 'hierarchy-tree', label: '조직도', icon: '🌳', path: '/admin/hierarchy/tree', minLevel: 'center_manager' },
-        { id: 'permissions', label: '권한 테스트', icon: '🔐', path: '/admin/hierarchy/permissions', minLevel: 'center_manager' }
       ]
     },
     {
@@ -174,17 +192,6 @@ const Sidebar: React.FC<SidebarProps> = ({ userType, isCollapsed = false, onTogg
       children: [
         { id: 'survey-editor', label: '설문 문항 편집', icon: '📝', path: '/admin/cms/questions', minLevel: 'staff' },
         { id: 'logic-editor', label: '분기 로직 편집', icon: '🔀', path: '/admin/cms/logic', minLevel: 'staff' }
-      ]
-    },
-    {
-      id: 'partnership',
-      label: '제휴 관리',
-      icon: '🤝',
-      path: '/admin/partnership',
-      minLevel: 'regional_manager', // 🎯 이미 통일됨
-      children: [
-        { id: 'hospital-manage', label: '병원 등록/수정', icon: '🏥', path: '/admin/partnership/hospitals', minLevel: 'regional_manager' },
-        { id: 'test-items', label: '검사 항목 등록/수정', icon: '🧪', path: '/admin/partnership/tests', minLevel: 'regional_manager' }
       ]
     },
     {
@@ -239,7 +246,7 @@ const Sidebar: React.FC<SidebarProps> = ({ userType, isCollapsed = false, onTogg
   const filterMenusByPermission = (menus: MenuItem[], userType: UserType): MenuItem[] => {
     return menus.filter(menu => {
       // 🎯 수퍼관리자 우선 처리 - 모든 메뉴에 접근 가능
-      if (userType === 'super_admin') {
+      if (userType === ('super_admin' as UserType)) {
         // 서브메뉴만 필터링하고 부모는 항상 유지
         if (menu.children) {
           menu.children = filterMenusByPermission(menu.children, userType);
@@ -255,7 +262,7 @@ const Sidebar: React.FC<SidebarProps> = ({ userType, isCollapsed = false, onTogg
       // 🎯 레거시 속성 지원 (하위 호환성)
       if (menu.adminOnly && !isAdmin(userType)) return false;
       if (menu.centerManagerOnly && !hasMinPermissionLevel(userType, 'center_manager')) return false;
-      if (menu.superAdminOnly && userType !== 'super_admin') return false;
+      if (menu.superAdminOnly && (!userType || userType !== ('super_admin' as UserType))) return false;
       
       // 서브메뉴 필터링
       if (menu.children) {
@@ -268,7 +275,7 @@ const Sidebar: React.FC<SidebarProps> = ({ userType, isCollapsed = false, onTogg
         const hasLegacyAccess = (
           (menu.adminOnly && isAdmin(userType)) ||
           (menu.centerManagerOnly && hasMinPermissionLevel(userType, 'center_manager')) ||
-          (menu.superAdminOnly && userType === 'super_admin')
+          (menu.superAdminOnly && userType === ('super_admin' as UserType))
         );
         
         // 부모 메뉴에 접근 권한이 있으면 서브메뉴가 없어도 유지
@@ -299,12 +306,12 @@ const Sidebar: React.FC<SidebarProps> = ({ userType, isCollapsed = false, onTogg
         hasStaffLevel: hasMinPermissionLevel(userType, 'staff'),
         hasCenterManagerLevel: hasMinPermissionLevel(userType, 'center_manager'),
         hasRegionalManagerLevel: hasMinPermissionLevel(userType, 'regional_manager'),
-        isSuperAdmin: userType === 'super_admin'
+        isSuperAdmin: userType === ('super_admin' as UserType)
       }
     });
     
     // 🎯 수퍼관리자 안전장치: 메뉴가 비어있으면 기본 메뉴라도 제공
-    if (menus.length === 0 && userType === 'super_admin') {
+    if (menus.length === 0 && userType === ('super_admin' as UserType)) {
       console.warn('수퍼관리자 메뉴가 비어있음, 기본 메뉴 제공');
       menus = [
         {
@@ -471,8 +478,7 @@ const Sidebar: React.FC<SidebarProps> = ({ userType, isCollapsed = false, onTogg
                                     isActive(subMenu.path) ? 'bg-secondary-600 text-white' : 'text-secondary-300'
                                   }`}
                       >
-                        <div className="flex items-center space-x-2">
-                          <span className="text-sm">{subMenu.icon}</span>
+                        <div className="flex items-center">
                           <span>{subMenu.label}</span>
                         </div>
                         {subMenu.badge && (

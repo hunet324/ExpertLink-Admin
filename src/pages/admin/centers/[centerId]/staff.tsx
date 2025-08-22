@@ -5,9 +5,10 @@ import { useRouter } from 'next/router';
 import Link from 'next/link';
 import { useStore } from '@/store/useStore';
 import { centerService, CenterStaffResponse } from '@/services/center';
+import { userService, UserResponse } from '@/services/user';
 import { withCenterManagerOnly } from '@/components/withPermission';
 import AdminLevelBadge from '@/components/AdminLevelBadge';
-import { getAdminLevelText, getPermissionLevelColor } from '@/utils/permissions';
+import { getAdminLevelText, getPermissionLevelColor, getUserType, hasMinPermissionLevel } from '@/utils/permissions';
 
 const CenterStaffPage: React.FC = () => {
   const router = useRouter();
@@ -18,33 +19,117 @@ const CenterStaffPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
   const [centerName, setCenterName] = useState<string>('');
+  
+  // 직원 추가 모달 관련
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [availableUsers, setAvailableUsers] = useState<UserResponse[]>([]);
+  const [loadingUsers, setLoadingUsers] = useState(false);
+  const [selectedUserId, setSelectedUserId] = useState<string>('');
+  const [addingStaff, setAddingStaff] = useState(false);
 
-  const userType = user?.user_type || user?.userType;
+  const userType = getUserType(user);
   const currentCenterId = user?.center_id || user?.centerId;
 
   // 센터별 직원 목록 조회
   useEffect(() => {
-    const fetchStaff = async () => {
+    const loadInitialData = async () => {
       if (!centerId || Array.isArray(centerId)) return;
 
       try {
-        setLoading(true);
-        const staffList = await centerService.getCenterStaff(parseInt(centerId));
-        setStaff(staffList);
-        
-        // 센터 이름은 첫 번째 직원의 정보에서 추출하거나 별도 API로 조회
-        setCenterName(`센터 ${centerId}`);
-        setError('');
-      } catch (err: any) {
-        console.error('직원 목록 조회 실패:', err);
-        setError(err.message || '직원 목록을 불러올 수 없습니다.');
-      } finally {
-        setLoading(false);
+        // 센터 정보 조회하여 실제 이름 설정
+        const centerInfo = await centerService.getCenterById(parseInt(centerId));
+        setCenterName(centerInfo.name || `센터 ${centerId}`);
+      } catch (error) {
+        console.error('센터 정보 조회 실패:', error);
+        setCenterName(`센터 ${centerId}`); // 실패 시 fallback
       }
+      
+      // 직원 목록 조회
+      await fetchStaff();
     };
 
-    fetchStaff();
+    loadInitialData();
   }, [centerId]);
+
+  // 직원 추가 가능한 사용자 목록 로드
+  const loadAvailableUsers = async () => {
+    try {
+      setLoadingUsers(true);
+      // general 타입이면서 center_id가 없는 사용자들 조회
+      const response = await userService.getAllUsers({
+        user_type: 'general',
+        limit: 100
+      });
+      
+      // center_id가 없는 사용자만 필터링
+      const availableUsersList = response.users.filter(user => !user.center_id);
+      setAvailableUsers(availableUsersList);
+    } catch (error) {
+      console.error('사용자 목록 로드 실패:', error);
+      alert('사용자 목록을 불러올 수 없습니다.');
+    } finally {
+      setLoadingUsers(false);
+    }
+  };
+
+  // 직원 목록 새로고침
+  const fetchStaff = async () => {
+    if (!centerId || Array.isArray(centerId)) return;
+
+    try {
+      setLoading(true);
+      const staffList = await centerService.getCenterStaff(parseInt(centerId));
+      setStaff(staffList);
+      setError('');
+    } catch (err: any) {
+      console.error('직원 목록 조회 실패:', err);
+      setError(err.message || '직원 목록을 불러올 수 없습니다.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 직원 추가 처리
+  const handleAddStaff = async () => {
+    if (!selectedUserId) {
+      alert('추가할 사용자를 선택해주세요.');
+      return;
+    }
+
+    if (!centerId || Array.isArray(centerId)) {
+      alert('센터 정보가 올바르지 않습니다.');
+      return;
+    }
+
+    try {
+      setAddingStaff(true);
+      
+      // 센터에 직원 배정 API 호출
+      const result = await centerService.assignStaffToCenter(
+        parseInt(centerId), 
+        parseInt(selectedUserId)
+      );
+      
+      alert(result.message || '직원이 성공적으로 추가되었습니다.');
+      
+      // 직원 목록 새로고침
+      await fetchStaff();
+      
+      setShowAddModal(false);
+      setSelectedUserId('');
+    } catch (error: any) {
+      console.error('직원 추가 실패:', error);
+      alert(error.message || '직원 추가 중 오류가 발생했습니다.');
+    } finally {
+      setAddingStaff(false);
+    }
+  };
+
+  // 모달 열기 시 사용자 목록 로드
+  const handleOpenAddModal = () => {
+    setShowAddModal(true);
+    loadAvailableUsers();
+  };
 
   if (loading) {
     return (
@@ -82,20 +167,19 @@ const CenterStaffPage: React.FC = () => {
             </div>
             
             <div className="flex items-center gap-2">
+              <button
+                onClick={handleOpenAddModal}
+                className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
+              >
+                <span>➕</span>
+                직원 추가
+              </button>
               <Link
                 href={`/admin/centers/${centerId}/experts`}
                 className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg transition-colors"
               >
                 전문가 관리
               </Link>
-              {userType === 'super_admin' && (
-                <Link
-                  href={`/admin/hierarchy/staff?centerId=${centerId}`}
-                  className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg transition-colors"
-                >
-                  계층 관리
-                </Link>
-              )}
             </div>
           </div>
         </div>
@@ -187,20 +271,10 @@ const CenterStaffPage: React.FC = () => {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                         <div className="flex items-center gap-2">
-                          <Link
-                            href={`/admin/hierarchy/user/${member.id}`}
-                            className="text-blue-600 hover:text-blue-900"
-                          >
-                            상세
-                          </Link>
+                          <span className="text-gray-400">상세</span>
                           {(userType === 'super_admin' || 
                             (userType === 'center_manager' && member.user_type === 'staff')) && (
-                            <Link
-                              href={`/admin/hierarchy/user/${member.id}/edit`}
-                              className="text-green-600 hover:text-green-900"
-                            >
-                              수정
-                            </Link>
+                            <span className="text-gray-400">수정</span>
                           )}
                         </div>
                       </td>
@@ -275,6 +349,94 @@ const CenterStaffPage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* 직원 추가 모달 */}
+      {showAddModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">직원 추가</h3>
+              <button
+                onClick={() => {
+                  setShowAddModal(false);
+                  setSelectedUserId('');
+                }}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  추가할 사용자 선택
+                </label>
+                {loadingUsers ? (
+                  <div className="flex items-center justify-center py-8">
+                    <div className="animate-spin h-6 w-6 border-2 border-blue-500 border-t-transparent rounded-full"></div>
+                    <span className="ml-2 text-gray-600">사용자 목록 로딩 중...</span>
+                  </div>
+                ) : availableUsers.length === 0 ? (
+                  <div className="text-center py-8">
+                    <p className="text-gray-500">추가 가능한 사용자가 없습니다.</p>
+                    <p className="text-sm text-gray-400 mt-1">
+                      일반 사용자 중 아직 센터에 배정되지 않은 사용자만 표시됩니다.
+                    </p>
+                  </div>
+                ) : (
+                  <select
+                    value={selectedUserId}
+                    onChange={(e) => setSelectedUserId(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="">사용자를 선택하세요</option>
+                    {availableUsers.map((user) => (
+                      <option key={user.id} value={user.id}>
+                        {user.name} ({user.email})
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                <div className="flex items-start">
+                  <span className="text-yellow-500 mr-2">⚠️</span>
+                  <div>
+                    <p className="text-sm text-yellow-800 font-medium">알림</p>
+                    <p className="text-sm text-yellow-700">
+                      선택한 사용자가 이 센터의 직원으로 배정되며, 사용자 타입이 &apos;staff&apos;로 변경됩니다.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 mt-6">
+              <button
+                onClick={() => {
+                  setShowAddModal(false);
+                  setSelectedUserId('');
+                }}
+                className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+              >
+                취소
+              </button>
+              <button
+                onClick={handleAddStaff}
+                disabled={!selectedUserId || addingStaff}
+                className="px-4 py-2 bg-green-500 hover:bg-green-600 disabled:bg-gray-400 text-white rounded-lg transition-colors flex items-center gap-2"
+              >
+                {addingStaff && (
+                  <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full"></div>
+                )}
+                {addingStaff ? '추가 중...' : '직원 추가'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

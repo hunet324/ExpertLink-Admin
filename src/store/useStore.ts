@@ -4,7 +4,7 @@ import { User, Center, Permission } from '@/types/user';
 import { AuthState, LoginDto, RegisterDto } from '@/types/auth';
 import { authService } from '@/services/auth';
 import { tokenManager } from '@/services/api';
-import { generateUserPermissions } from '@/utils/permissions';
+import { generateUserPermissions, getUserType } from '@/utils/permissions';
 
 interface AppState extends AuthState {
   // UI 상태
@@ -24,7 +24,7 @@ interface AppState extends AuthState {
   register: (userData: RegisterDto) => Promise<any>;
   registerAndLogin: (userData: RegisterDto) => Promise<void>;
   logout: () => Promise<void>;
-  refreshToken: () => Promise<void>;
+  refreshAuthToken: () => Promise<void>;
   getCurrentUser: (forceRefresh?: boolean) => Promise<void>;
   validateAuth: () => Promise<boolean>;
   
@@ -208,7 +208,12 @@ export const useStore = create<AppState>()(
                 refreshToken: null,
                 isAuthenticated: false,
                 isLoading: false,
-                pendingExpertsCount: 0, // 관리자 상태도 초기화
+                // 관리자 및 센터 관련 상태 초기화
+                pendingExpertsCount: 0,
+                currentCenter: null,
+                managedCenters: [],
+                userPermissions: null,
+                selectedCenterId: null,
               });
               console.log('로컬 상태 초기화 완료');
             } catch (error) {
@@ -220,13 +225,18 @@ export const useStore = create<AppState>()(
                 refreshToken: null,
                 isAuthenticated: false,
                 isLoading: false,
+                // 관리자 및 센터 관련 상태 초기화
                 pendingExpertsCount: 0,
+                currentCenter: null,
+                managedCenters: [],
+                userPermissions: null,
+                selectedCenterId: null,
               });
               // 에러를 다시 던지지 않음 (로그아웃은 항상 성공으로 처리)
             }
           },
 
-          refreshToken: async () => {
+          refreshAuthToken: async (): Promise<void> => {
             // 토큰 갱신 기능 제거 (무한루프 방지)
             throw new Error('토큰 갱신 기능이 제거되었습니다. 다시 로그인해주세요.');
           },
@@ -277,7 +287,7 @@ export const useStore = create<AppState>()(
 
           // 사용자 액션
           setUser: (user: User) => {
-            const userType = user.user_type || user.userType;
+            const userType = getUserType(user);
             const centerId = user.center_id || user.centerId;
             const supervisorId = user.supervisor_id || user.supervisorId;
             
@@ -299,6 +309,12 @@ export const useStore = create<AppState>()(
               accessToken: null,
               refreshToken: null,
               isAuthenticated: false,
+              // 관리자 및 센터 관련 상태도 초기화
+              currentCenter: null,
+              managedCenters: [],
+              userPermissions: null,
+              selectedCenterId: null,
+              pendingExpertsCount: 0,
             });
           },
 
@@ -365,7 +381,7 @@ export const useStore = create<AppState>()(
             const state = get();
             const user = state.user;
             if (user) {
-              const userType = user.user_type || user.userType;
+              const userType = getUserType(user);
               const centerId = user.center_id || user.centerId;
               const supervisorId = user.supervisor_id || user.supervisorId;
               

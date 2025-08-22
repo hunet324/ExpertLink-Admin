@@ -1,11 +1,12 @@
 // 권한 기반 컴포넌트 렌더링 제어
 
 import React from 'react';
-import { UserType } from '@/types/user';
-import { hasMinPermissionLevel, canAccessMenu, isAdmin } from '@/utils/permissions';
+import { UserType, User } from '@/types/user';
+import { hasMinPermissionLevel, canAccessMenu, isAdmin, getUserType } from '@/utils/permissions';
 
 interface PermissionGuardProps {
   children: React.ReactNode;
+  user?: User | null;
   userType?: UserType;
   minLevel?: UserType;
   adminOnly?: boolean;
@@ -18,7 +19,8 @@ interface PermissionGuardProps {
 
 export const PermissionGuard: React.FC<PermissionGuardProps> = ({
   children,
-  userType,
+  user,
+  userType: propUserType,
   minLevel,
   adminOnly = false,
   centerManagerOnly = false,
@@ -27,6 +29,9 @@ export const PermissionGuard: React.FC<PermissionGuardProps> = ({
   fallback = null,
   inverse = false
 }) => {
+  // userType 추출 (props에서 직접 전달되었거나 user 객체에서 추출)
+  const userType = propUserType || getUserType(user);
+  
   // userType이 없으면 렌더링하지 않음
   if (!userType) {
     return <>{fallback}</>;
@@ -70,30 +75,33 @@ export const PermissionGuard: React.FC<PermissionGuardProps> = ({
 // 권한별 래퍼 컴포넌트들
 export const AdminOnly: React.FC<{
   children: React.ReactNode;
+  user?: User | null;
   userType?: UserType;
   fallback?: React.ReactNode;
-}> = ({ children, userType, fallback }) => (
-  <PermissionGuard userType={userType} adminOnly fallback={fallback}>
+}> = ({ children, user, userType, fallback }) => (
+  <PermissionGuard user={user} userType={userType} adminOnly fallback={fallback}>
     {children}
   </PermissionGuard>
 );
 
 export const CenterManagerOnly: React.FC<{
   children: React.ReactNode;
+  user?: User | null;
   userType?: UserType;
   fallback?: React.ReactNode;
-}> = ({ children, userType, fallback }) => (
-  <PermissionGuard userType={userType} centerManagerOnly fallback={fallback}>
+}> = ({ children, user, userType, fallback }) => (
+  <PermissionGuard user={user} userType={userType} centerManagerOnly fallback={fallback}>
     {children}
   </PermissionGuard>
 );
 
 export const SuperAdminOnly: React.FC<{
   children: React.ReactNode;
+  user?: User | null;
   userType?: UserType;
   fallback?: React.ReactNode;
-}> = ({ children, userType, fallback }) => (
-  <PermissionGuard userType={userType} superAdminOnly fallback={fallback}>
+}> = ({ children, user, userType, fallback }) => (
+  <PermissionGuard user={user} userType={userType} superAdminOnly fallback={fallback}>
     {children}
   </PermissionGuard>
 );

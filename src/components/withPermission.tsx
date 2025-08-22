@@ -5,6 +5,7 @@ import { useRouter } from 'next/router';
 import { useStore } from '@/store/useStore';
 import { UserType } from '@/types/user';
 import { hasMinPermissionLevel, isAdmin, canAccessMenu } from '@/utils/permissions';
+import AdminLayout from '@/components/Layout/AdminLayout';
 
 interface WithPermissionOptions {
   minLevel?: UserType;
@@ -13,6 +14,7 @@ interface WithPermissionOptions {
   superAdminOnly?: boolean;
   redirectTo?: string;
   fallbackComponent?: React.ComponentType;
+  useLayout?: boolean; // 관리자 레이아웃 사용 여부
 }
 
 // 로딩 컴포넌트
@@ -70,7 +72,8 @@ export function withPermission<P extends object>(
     centerManagerOnly = false,
     superAdminOnly = false,
     redirectTo = '/admin/dashboard',
-    fallbackComponent: FallbackComponent = AccessDeniedComponent
+    fallbackComponent: FallbackComponent = AccessDeniedComponent,
+    useLayout = true // 기본적으로 레이아웃 사용
   } = options;
 
   const WithPermissionComponent: React.FC<P> = (props) => {
@@ -159,8 +162,16 @@ export function withPermission<P extends object>(
       return <FallbackComponent redirectTo={redirectTo} />;
     }
 
-    // 권한 있음 - 원래 컴포넌트 렌더링
-    return <WrappedComponent {...props} />;
+    // 권한 있음 - 원래 컴포넌트 렌더링 (레이아웃 포함 여부에 따라)
+    if (useLayout) {
+      return (
+        <AdminLayout>
+          <WrappedComponent {...props} />
+        </AdminLayout>
+      );
+    } else {
+      return <WrappedComponent {...props} />;
+    }
   };
 
   // 컴포넌트 이름 설정 (디버깅용)
@@ -171,20 +182,24 @@ export function withPermission<P extends object>(
 
 // 편의를 위한 래퍼 함수들
 export const withAdminOnly = <P extends object>(
-  Component: React.ComponentType<P>
-) => withPermission(Component, { adminOnly: true });
+  Component: React.ComponentType<P>,
+  useLayout: boolean = true
+) => withPermission(Component, { adminOnly: true, useLayout });
 
 export const withCenterManagerOnly = <P extends object>(
-  Component: React.ComponentType<P>
-) => withPermission(Component, { centerManagerOnly: true });
+  Component: React.ComponentType<P>,
+  useLayout: boolean = true
+) => withPermission(Component, { centerManagerOnly: true, useLayout });
 
 export const withSuperAdminOnly = <P extends object>(
-  Component: React.ComponentType<P>
-) => withPermission(Component, { superAdminOnly: true });
+  Component: React.ComponentType<P>,
+  useLayout: boolean = true
+) => withPermission(Component, { superAdminOnly: true, useLayout });
 
 export const withMinLevel = <P extends object>(
   Component: React.ComponentType<P>,
-  minLevel: UserType
-) => withPermission(Component, { minLevel });
+  minLevel: UserType,
+  useLayout: boolean = true
+) => withPermission(Component, { minLevel, useLayout });
 
 export default withPermission;

@@ -300,7 +300,7 @@ const RevenueStatisticsPage: React.FC = () => {
     <div className="flex h-screen bg-background-50">
       {/* 사이드바 */}
       <Sidebar 
-        userType="admin" 
+        userType="super_admin" 
         isCollapsed={sidebarCollapsed}
         onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
       />

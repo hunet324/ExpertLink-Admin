@@ -7,7 +7,7 @@ import { withAdminOnly } from '@/components/withPermission';
 import AdminLevelBadge from '@/components/AdminLevelBadge';
 import PermissionGuard from '@/components/PermissionGuard';
 import Sidebar from '@/components/Layout/Sidebar';
-import { hasMinPermissionLevel } from '@/utils/permissions';
+import { hasMinPermissionLevel, getUserType } from '@/utils/permissions';
 
 interface SystemStats {
   totalUsers: number;
@@ -42,7 +42,7 @@ const AdminDashboard: React.FC = () => {
   const [error, setError] = useState<string>('');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
-  const userType = user?.user_type || user?.userType;
+  const userType = getUserType(user);
 
   // 권한별 시스템 통계 데이터 생성
   const getSystemStats = (): SystemStats => {
@@ -609,17 +609,6 @@ const AdminDashboard: React.FC = () => {
                 </Link>
               </PermissionGuard>
               
-              {/* 계층 관리 - 센터관리자 이상 */}
-              <PermissionGuard minLevel="center_manager">
-                <Link
-                  href="/admin/hierarchy/staff"
-                  className="flex flex-col items-center p-4 bg-teal-50 hover:bg-teal-100 rounded-lg transition-colors group"
-                >
-                  <span className="text-2xl mb-2">🏗️</span>
-                  <span className="text-sm font-medium text-teal-600 group-hover:text-teal-700">계층 관리</span>
-                </Link>
-              </PermissionGuard>
-              
               {/* 전문가 관리 - 센터관리자 이상 */}
               <PermissionGuard minLevel="center_manager">
                 <Link
@@ -632,12 +621,12 @@ const AdminDashboard: React.FC = () => {
               </PermissionGuard>
             </div>
           </div>
-            </div>
-          </div>
+        </div>
         </div>
       </div>
     </div>
+  </div>
   );
 };
 
-export default withAdminOnly(AdminDashboard);
+export default withAdminOnly(AdminDashboard, false); // 레이아웃 비활성화 - 페이지에서 직접 처리

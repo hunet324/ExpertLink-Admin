@@ -61,7 +61,6 @@ export class AdminService {
   async getPendingExperts(): Promise<ExpertApplication[]> {
     try {
       const response = await apiClient.get<any>('/admin/experts/pending');
-      console.log('Admin service raw response:', response);
       
       // API 응답 구조 처리
       if (Array.isArray(response)) {
@@ -84,105 +83,52 @@ export class AdminService {
    * 전문가 승인/거부 처리
    */
   async verifyExpert(expert: ExpertApplication, verificationData: ExpertVerificationDto): Promise<ExpertApplication> {
-    console.log('=== 전문가 승인 요청 시작 ===')
-    console.log('전문가 정보:', expert);
-    console.log('요청 데이터:', JSON.stringify(verificationData, null, 2));
-    
     // URL에 사용할 ID 결정 (id가 null이면 0 사용)
     const urlId = expert.id || 0;
     
-    // 현재 토큰 상태 상세 확인
+    // 현재 토큰 상태 확인
     const currentToken = tokenManager.getAccessToken();
-    console.log('현재 토큰 존재 여부:', !!currentToken);
-    console.log('localStorage 직접 확인:', !!localStorage.getItem('expertlink_access_token'));
     
     if (!currentToken) {
-      console.error('❌ 토큰이 없습니다! 로그인 상태를 확인하세요.');
       throw new Error('인증 토큰이 없습니다. 다시 로그인해주세요.');
     }
     
-    if (currentToken) {
-      try {
-        const payload = JSON.parse(atob(currentToken.split('.')[1]));
-        console.log('토큰 payload 상세:', {
-          userId: payload.sub,
-          email: payload.email,
-          user_type: payload.user_type,
-          exp: new Date(payload.exp * 1000).toISOString(),
-          iat: new Date(payload.iat * 1000).toISOString()
-        });
-        
-        if (payload.user_type !== 'admin') {
-          console.error('토큰에 관리자 권한이 없음:', payload.user_type);
-          throw new Error('관리자 권한이 필요합니다.');
-        }
-      } catch (e) {
-        console.error('토큰 디코딩 실패:', e);
+    // 관리자 권한 확인
+    try {
+      const payload = JSON.parse(atob(currentToken.split('.')[1]));
+      const adminTypes = ['super_admin', 'regional_manager', 'center_manager', 'staff'];
+      if (!adminTypes.includes(payload.user_type)) {
+        throw new Error('관리자 권한이 필요합니다.');
       }
+    } catch (e) {
+      throw new Error('토큰 검증에 실패했습니다.');
     }
     
     const endpoint = `/admin/experts/${urlId}/verify`;
-    console.log(`API 엔드포인트: ${endpoint}`);
-    
-    // 추가 헤더로 명시적 권한 전달 시도
-    const additionalHeaders: Record<string, string> = {};
-    
-    if (currentToken) {
-      try {
-        const payload = JSON.parse(atob(currentToken.split('.')[1]));
-        // 카멜케이스 헤더로 변경
-        additionalHeaders['xUserType'] = payload.user_type;
-        additionalHeaders['xUserId'] = payload.sub?.toString();
-        additionalHeaders['xUserEmail'] = payload.email;
-      } catch (e) {
-        console.warn('추가 헤더 설정 실패:', e);
-      }
-    }
-    
-    console.log('추가 헤더:', additionalHeaders);
     
     try {
-      const result = await apiClient.put<ExpertApplication>(endpoint, verificationData, {
-        headers: additionalHeaders
-      });
-      console.log('승인 성공!');
-      console.log('응답 데이터:', result);
+      const result = await apiClient.put<ExpertApplication>(endpoint, verificationData);
       return result;
     } catch (error: any) {
-      console.error('=== 승인 요청 실패 ===')
-      console.error('에러 상세:', {
-        status: error.statusCode,
-        message: error.message,
-        originalError: error.originalError,
-        fullError: error
-      });
-      
       // 403 에러인 경우 대체 엔드포인트 시도
       if (error.statusCode === 403) {
-        console.error('403 에러 - 대체 엔드포인트 시도');
-        
         const alternativeEndpoints = [
-          `/admin/users/${expertId}/verify`,
-          `/admin/users/${expertId}/status`,
-          `/admin/experts/${expertId}/status`,
-          `/users/${expertId}/verify`,
-          `/experts/${expertId}/verify`
+          `/admin/users/${urlId}/verify`,
+          `/admin/users/${urlId}/status`,
+          `/admin/experts/${urlId}/status`,
+          `/users/${urlId}/verify`,
+          `/experts/${urlId}/verify`
         ];
         
         for (const altEndpoint of alternativeEndpoints) {
           try {
-            console.log('대체 엔드포인트 시도:', altEndpoint);
-            const result = await apiClient.put<ExpertApplication>(altEndpoint, verificationData, {
-              headers: additionalHeaders
-            });
-            console.log('대체 엔드포인트 성공:', altEndpoint);
+            const result = await apiClient.put<ExpertApplication>(altEndpoint, verificationData);
             return result;
           } catch (altError: any) {
-            console.warn(`대체 엔드포인트 ${altEndpoint} 실패:`, altError.statusCode, altError.message);
+            // 조용히 다음 엔드포인트 시도
+            continue;
           }
         }
-        
-        console.error('모든 대체 엔드포인트 실패');
       }
       
       throw error;

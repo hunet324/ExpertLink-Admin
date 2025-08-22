@@ -7,7 +7,7 @@ interface User {
   name: string;
   email: string;
   phone?: string;
-  userType: 'client' | 'expert' | 'admin';
+  userType: 'client' | 'expert' | 'admin' | 'super_admin';
   status: 'active' | 'inactive' | 'suspended' | 'pending';
   emailVerified: boolean;
   phoneVerified: boolean;
@@ -129,7 +129,7 @@ const AllUsersPage: React.FC = () => {
       name: '김관리자',
       email: 'admin@expertlink.com',
       phone: '010-5555-6666',
-      userType: 'admin',
+      userType: 'super_admin',
       status: 'active',
       emailVerified: true,
       phoneVerified: true,
@@ -202,7 +202,8 @@ const AllUsersPage: React.FC = () => {
     const typeLabels = {
       'client': '내담자',
       'expert': '전문가',
-      'admin': '관리자'
+      'admin': '관리자',
+      'super_admin': '최고관리자'
     };
     return typeLabels[type];
   };
@@ -211,7 +212,8 @@ const AllUsersPage: React.FC = () => {
     const typeColors = {
       'client': 'bg-primary-100 text-primary-700',
       'expert': 'bg-accent-100 text-accent-700',
-      'admin': 'bg-secondary-100 text-secondary-700'
+      'admin': 'bg-secondary-100 text-secondary-700',
+      'super_admin': 'bg-red-100 text-red-700'
     };
     return typeColors[type];
   };
@@ -262,7 +264,7 @@ const AllUsersPage: React.FC = () => {
       total: users.length,
       clients: users.filter(u => u.userType === 'client').length,
       experts: users.filter(u => u.userType === 'expert').length,
-      admins: users.filter(u => u.userType === 'admin').length,
+      admins: users.filter(u => ['staff', 'center_manager', 'regional_manager', 'super_admin'].includes(u.userType)).length,
       active: users.filter(u => u.status === 'active').length,
       suspended: users.filter(u => u.status === 'suspended').length
     };
@@ -310,7 +312,7 @@ const AllUsersPage: React.FC = () => {
     <div className="flex h-screen bg-background-50">
       {/* 사이드바 */}
       <Sidebar 
-        userType="admin" 
+        userType="super_admin" 
         isCollapsed={sidebarCollapsed}
         onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
       />

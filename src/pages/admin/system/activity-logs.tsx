@@ -6,7 +6,7 @@ interface UserActivityLog {
   id: string;
   userId: string;
   userName: string;
-  userType: 'client' | 'expert' | 'admin';
+  userType: 'client' | 'expert' | 'admin' | 'super_admin';
   userEmail: string;
   activity: string;
   activityType: 'login' | 'logout' | 'view' | 'create' | 'update' | 'delete' | 'payment' | 'booking' | 'message';
@@ -170,7 +170,7 @@ const UserActivityLogsPage: React.FC = () => {
       id: 'activity_005',
       userId: 'admin_001',
       userName: '김관리자',
-      userType: 'admin',
+      userType: 'super_admin',
       userEmail: 'admin@expertlink.com',
       activity: 'USER_STATUS_CHANGE',
       activityType: 'update',
@@ -331,7 +331,8 @@ const UserActivityLogsPage: React.FC = () => {
     const typeColors = {
       'client': 'bg-primary-100 text-primary-700',
       'expert': 'bg-accent-100 text-accent-700',
-      'admin': 'bg-secondary-100 text-secondary-700'
+      'admin': 'bg-secondary-100 text-secondary-700',
+      'super_admin': 'bg-red-100 text-red-700'
     };
     return typeColors[type];
   };
@@ -340,7 +341,8 @@ const UserActivityLogsPage: React.FC = () => {
     const typeLabels = {
       'client': '내담자',
       'expert': '전문가',
-      'admin': '관리자'
+      'admin': '관리자',
+      'super_admin': '최고관리자'
     };
     return typeLabels[type];
   };
@@ -412,7 +414,7 @@ const UserActivityLogsPage: React.FC = () => {
     <div className="flex h-screen bg-background-50">
       {/* 사이드바 */}
       <Sidebar 
-        userType="admin" 
+        userType="super_admin" 
         isCollapsed={sidebarCollapsed}
         onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
       />
