@@ -35,7 +35,6 @@ interface ClientProfile {
 }
 
 const ClientProfilePage: React.FC = () => {
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [activeTab, setActiveTab] = useState<'profile' | 'sessions' | 'assessments' | 'notes'>('profile');
 
@@ -165,8 +164,6 @@ const ClientProfilePage: React.FC = () => {
       {/* 사이드바 */}
       <Sidebar 
         userType="expert" 
-        isCollapsed={sidebarCollapsed}
-        onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
       />
 
       {/* 메인 콘텐츠 */}

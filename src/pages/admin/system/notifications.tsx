@@ -26,7 +26,6 @@ interface NotificationTemplate {
 
 const NotificationTemplatesPage: React.FC = () => {
   const router = useRouter();
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState<'all' | NotificationTemplate['type']>('all');
   const [categoryFilter, setCategoryFilter] = useState<'all' | NotificationTemplate['category']>('all');
@@ -430,8 +429,6 @@ const NotificationTemplatesPage: React.FC = () => {
       {/* 사이드바 */}
       <Sidebar 
         userType="super_admin" 
-        isCollapsed={sidebarCollapsed}
-        onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
       />
 
       {/* 메인 콘텐츠 */}

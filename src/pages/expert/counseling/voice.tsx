@@ -35,7 +35,6 @@ interface VoiceCallLog {
 
 const VoiceCounselingPage: React.FC = () => {
   const router = useRouter();
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [micEnabled, setMicEnabled] = useState(true);
   const [speakerEnabled, setSpeakerEnabled] = useState(true);
   const [recordingEnabled, setRecordingEnabled] = useState(false);
@@ -236,8 +235,6 @@ const VoiceCounselingPage: React.FC = () => {
       {/* 사이드바 */}
       <Sidebar 
         userType="expert" 
-        isCollapsed={sidebarCollapsed}
-        onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
       />
 
       {/* 메인 콘텐츠 */}

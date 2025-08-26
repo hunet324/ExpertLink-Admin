@@ -1,6 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import Sidebar from '@/components/Layout/Sidebar';
+import { expertService, ExpertProfileResponse, UpdateExpertProfileRequest } from '@/services/expert';
+import { useStore } from '@/store/useStore';
 
 interface ExpertProfile {
   id: string;
@@ -8,8 +10,10 @@ interface ExpertProfile {
   email: string;
   phone: string;
   licenseNumber: string;
+  licenseType: string;
   specialization: string[];
   experience: number;
+  hourlyRate: number;
   education: string[];
   certifications: string[];
   bio: string;
@@ -33,19 +37,24 @@ interface ExpertProfile {
 
 const ExpertProfilePage: React.FC = () => {
   const router = useRouter();
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const { user } = useStore();
   const [isEditing, setIsEditing] = useState(false);
   const [activeTab, setActiveTab] = useState<'basic' | 'schedule' | 'consultation' | 'security'>('basic');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string>('');
+  const [saving, setSaving] = useState(false);
 
-  // 전문가 프로필 샘플 데이터
+  // 전문가 프로필 초기 데이터
   const [profile, setProfile] = useState<ExpertProfile>({
     id: 'expert_001',
     name: '김상담사',
     email: 'kim.counselor@expertlink.com',
     phone: '010-1234-5678',
-    licenseNumber: '임상심리사 1급 제2024-001호',
+    licenseNumber: '',
+    licenseType: '',
     specialization: ['우울/불안', '대인관계', '학습상담', 'ADHD'],
-    experience: 8,
+    experience: 0,
+    hourlyRate: 50000,
     education: [
       '서울대학교 심리학과 학사',
       '연세대학교 임상심리학 석사',
@@ -98,6 +107,64 @@ const ExpertProfilePage: React.FC = () => {
 
   const [tempProfile, setTempProfile] = useState<ExpertProfile>({ ...profile });
 
+  // 프로필 데이터 로드
+  useEffect(() => {
+    fetchProfile();
+  }, []);
+
+  const fetchProfile = async () => {
+    try {
+      setLoading(true);
+      const response: ExpertProfileResponse = await expertService.getProfile();
+      
+      const profileData: ExpertProfile = {
+        id: response.profile.id.toString(),
+        name: response.user.name,
+        email: response.user.email,
+        phone: response.user.phone,
+        licenseNumber: response.profile.licenseNumber || '',
+        licenseType: response.profile.licenseType || '',
+        specialization: response.profile.specialization || [],
+        experience: response.profile.yearsExperience || 0,
+        hourlyRate: response.profile.hourlyRate || 50000,
+        education: [],
+        certifications: [],
+        bio: response.profile.introduction || '',
+        profileImage: undefined,
+        availableHours: {
+          'monday': [{ start: '09:00', end: '18:00' }],
+          'tuesday': [{ start: '09:00', end: '18:00' }],
+          'wednesday': [{ start: '09:00', end: '18:00' }],
+          'thursday': [{ start: '09:00', end: '18:00' }],
+          'friday': [{ start: '09:00', end: '18:00' }],
+          'saturday': [],
+          'sunday': []
+        },
+        consultation: {
+          video: true,
+          chat: true,
+          voice: true
+        },
+        pricing: {
+          video: response.profile.hourlyRate || 50000,
+          chat: response.profile.hourlyRate || 50000,
+          voice: response.profile.hourlyRate || 50000
+        },
+        isActive: true,
+        joinDate: response.profile.createdAt
+      };
+      
+      setProfile(profileData);
+      setTempProfile(profileData);
+      setError('');
+    } catch (err: any) {
+      console.error('프로필 조회 실패:', err);
+      setError(err.message || '프로필을 불러올 수 없습니다.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const dayNames = {
     'monday': '월요일',
     'tuesday': '화요일',
@@ -110,10 +177,50 @@ const ExpertProfilePage: React.FC = () => {
 
   const handleSave = async () => {
     if (confirm('변경사항을 저장하시겠습니까?')) {
-      setProfile({ ...tempProfile });
-      setIsEditing(false);
-      console.log('프로필 업데이트:', tempProfile);
-      alert('프로필이 성공적으로 업데이트되었습니다.');
+      let updateData: UpdateExpertProfileRequest | undefined;
+      try {
+        setSaving(true);
+        
+        updateData = {
+          licenseNumber: tempProfile.licenseNumber,
+          licenseType: tempProfile.licenseType,
+          yearsExperience: tempProfile.experience,
+          hourlyRate: tempProfile.hourlyRate,
+          specialization: tempProfile.specialization,
+          introduction: tempProfile.bio
+        };
+        
+        console.group('🚀 Profile Update Process Started');
+        console.log('Current profile:', profile);
+        console.log('Temp profile changes:', tempProfile);
+        console.log('Update data to be sent:', updateData);
+        console.log('API Configuration:', {
+          useProxy: process.env.NEXT_PUBLIC_USE_PROXY,
+          apiUrl: process.env.NEXT_PUBLIC_API_URL
+        });
+        
+        const response = await expertService.updateProfile(updateData);
+        
+        console.log('✅ Update successful, response:', response);
+        console.groupEnd();
+        
+        setProfile({ ...tempProfile });
+        setIsEditing(false);
+        alert('프로필이 성공적으로 업데이트되었습니다.');
+      } catch (err: any) {
+        console.group('❌ Profile Update Error');
+        console.error('Error type:', err?.constructor?.name);
+        console.error('Error message:', err?.message);
+        console.error('Error object:', err);
+        if (updateData) {
+          console.error('Update data that failed:', updateData);
+        }
+        console.groupEnd();
+        
+        alert(err.message || '프로필 업데이트에 실패했습니다.');
+      } finally {
+        setSaving(false);
+      }
     }
   };
 
@@ -131,6 +238,47 @@ const ExpertProfilePage: React.FC = () => {
 
   const formatPrice = (price: number) => {
     return `${price.toLocaleString()}원`;
+  };
+
+  // 임시 API 테스트 함수 (디버깅용)
+  const testApiConnection = async () => {
+    console.group('🧪 Comprehensive API Connection Test');
+    try {
+      // 1. 기본 연결 테스트
+      console.log('1. Testing basic connectivity...');
+      const { networkDebugger } = await import('@/services/api');
+      await networkDebugger.testConnectivity();
+      
+      // 2. 직접 API 테스트
+      console.log('2. Testing direct API connection...');
+      await networkDebugger.testWithDirectAPI();
+      
+      // 3. GET 요청으로 현재 프로필 조회 테스트
+      console.log('3. Testing GET /experts/profile...');
+      const getResponse = await expertService.getProfile();
+      console.log('✅ GET request successful:', getResponse);
+
+      // 4. 간단한 PUT 요청 테스트 (현재 데이터와 동일한 데이터로)
+      console.log('4. Testing PUT /experts/profile...');
+      const testData = {
+        licenseNumber: profile.licenseNumber || '',
+        licenseType: profile.licenseType || '',
+        yearsExperience: profile.experience || 0,
+        hourlyRate: profile.hourlyRate || 50000,
+        specialization: profile.specialization || [],
+        introduction: profile.bio || ''
+      };
+      console.log('Test data:', testData);
+      
+      const putResponse = await expertService.updateProfile(testData);
+      console.log('✅ PUT request successful:', putResponse);
+      
+      alert('✅ API 종합 테스트 완료! 콘솔에서 상세 결과를 확인하세요.');
+    } catch (error) {
+      console.error('❌ API connection test failed:', error);
+      alert('❌ API 연결 테스트 실패. 콘솔에서 에러 상세를 확인하세요.');
+    }
+    console.groupEnd();
   };
 
   const renderBasicInfo = () => (
@@ -198,6 +346,21 @@ const ExpertProfilePage: React.FC = () => {
             </div>
             
             <div>
+              <label className="text-caption text-secondary-400 block mb-1">자격증 종류</label>
+              {isEditing ? (
+                <input
+                  type="text"
+                  value={tempProfile.licenseType}
+                  onChange={(e) => setTempProfile(prev => ({ ...prev, licenseType: e.target.value }))}
+                  className="w-full border border-background-300 rounded-lg px-3 py-2 text-body focus:outline-none focus:border-primary-300"
+                  placeholder="예: 임상심리사 1급"
+                />
+              ) : (
+                <div className="text-body text-secondary-700">{profile.licenseType || '미설정'}</div>
+              )}
+            </div>
+            
+            <div>
               <label className="text-caption text-secondary-400 block mb-1">자격증 번호</label>
               {isEditing ? (
                 <input
@@ -205,9 +368,10 @@ const ExpertProfilePage: React.FC = () => {
                   value={tempProfile.licenseNumber}
                   onChange={(e) => setTempProfile(prev => ({ ...prev, licenseNumber: e.target.value }))}
                   className="w-full border border-background-300 rounded-lg px-3 py-2 text-body focus:outline-none focus:border-primary-300"
+                  placeholder="예: 제2024-001호"
                 />
               ) : (
-                <div className="text-body text-secondary-700">{profile.licenseNumber}</div>
+                <div className="text-body text-secondary-700">{profile.licenseNumber || '미설정'}</div>
               )}
             </div>
             
@@ -422,6 +586,33 @@ const ExpertProfilePage: React.FC = () => {
 
   const renderConsultation = () => (
     <div className="space-y-6">
+      {/* 시간당 상담료 */}
+      <div className="bg-white rounded-custom shadow-soft p-6 mb-6">
+        <h3 className="text-h4 font-semibold text-secondary mb-4">시간당 상담료</h3>
+        
+        <div className="max-w-md">
+          <div className="flex items-center space-x-3">
+            {isEditing ? (
+              <>
+                <input
+                  type="number"
+                  value={tempProfile.hourlyRate}
+                  onChange={(e) => setTempProfile(prev => ({ ...prev, hourlyRate: parseInt(e.target.value) || 0 }))}
+                  className="w-32 border border-background-300 rounded-lg px-3 py-2 text-body focus:outline-none focus:border-primary-300"
+                  step="1000"
+                />
+                <span className="text-body text-secondary-700">원/시간</span>
+              </>
+            ) : (
+              <div className="text-h3 font-bold text-primary">{formatPrice(profile.hourlyRate)}/시간</div>
+            )}
+          </div>
+          <p className="text-caption text-secondary-500 mt-2">
+            모든 상담 방식에 동일하게 적용됩니다.
+          </p>
+        </div>
+      </div>
+
       {/* 상담 방식 */}
       <div className="bg-white rounded-custom shadow-soft p-6">
         <h3 className="text-h4 font-semibold text-secondary mb-4">제공 상담 방식</h3>
@@ -592,13 +783,25 @@ const ExpertProfilePage: React.FC = () => {
     </div>
   );
 
+  if (loading) {
+    return (
+      <div className="flex h-screen bg-background-50">
+        <Sidebar userType="expert"
+        />
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin h-12 w-12 border-4 border-primary border-t-transparent rounded-full mx-auto mb-4"></div>
+            <p className="text-secondary-600">프로필을 불러오는 중...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-screen bg-background-50">
       {/* 사이드바 */}
-      <Sidebar 
-        userType="expert" 
-        isCollapsed={sidebarCollapsed}
-        onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
+      <Sidebar userType="expert"
       />
 
       {/* 메인 콘텐츠 */}
@@ -616,6 +819,15 @@ const ExpertProfilePage: React.FC = () => {
               </p>
             </div>
             <div className="flex items-center space-x-4">
+              {/* 임시 디버그 버튼 */}
+              <button
+                onClick={testApiConnection}
+                className="bg-yellow-500 text-white px-3 py-2 rounded text-xs font-medium hover:bg-yellow-600 transition-colors"
+                title="API 연결 테스트 (디버깅용)"
+              >
+                🧪 API 테스트
+              </button>
+              
               {isEditing ? (
                 <div className="flex space-x-2">
                   <button
@@ -626,9 +838,13 @@ const ExpertProfilePage: React.FC = () => {
                   </button>
                   <button
                     onClick={handleSave}
-                    className="bg-primary text-white px-4 py-2 rounded-lg text-caption font-medium hover:bg-primary-600 transition-colors"
+                    disabled={saving}
+                    className="bg-primary text-white px-4 py-2 rounded-lg text-caption font-medium hover:bg-primary-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                   >
-                    저장
+                    {saving && (
+                      <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full"></div>
+                    )}
+                    {saving ? '저장 중...' : '저장'}
                   </button>
                 </div>
               ) : (
@@ -650,9 +866,9 @@ const ExpertProfilePage: React.FC = () => {
               
               <div className="flex items-center space-x-2">
                 <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center">
-                  <span className="text-white text-sm font-bold">김</span>
+                  <span className="text-white text-sm font-bold">{profile.name.charAt(0)}</span>
                 </div>
-                <span className="text-body text-secondary-600">김상담사님</span>
+                <span className="text-body text-secondary-600">{profile.name}님</span>
               </div>
             </div>
           </div>

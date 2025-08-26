@@ -231,20 +231,6 @@ const ExpertVacationPage: React.FC = () => {
               </div>
             </div>
             
-            <div className="flex items-center gap-2">
-              <Link
-                href="/admin/experts/schedule"
-                className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg transition-colors"
-              >
-                스케줄 관리
-              </Link>
-              <Link
-                href="/admin/experts/working-hours"
-                className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg transition-colors"
-              >
-                근무시간 관리
-              </Link>
-            </div>
           </div>
         </div>
 

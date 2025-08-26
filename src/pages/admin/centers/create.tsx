@@ -31,7 +31,7 @@ interface Manager {
   id: number;
   name: string;
   email: string;
-  user_type: UserType;
+  userType: UserType;
 }
 
 interface ParentCenter {

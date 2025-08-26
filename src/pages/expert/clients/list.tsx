@@ -17,7 +17,6 @@ interface Client {
 }
 
 const ClientListPage: React.FC = () => {
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive' | 'completed'>('all');
   const [sortBy, setSortBy] = useState<'name' | 'registrationDate' | 'lastSession'>('registrationDate');
@@ -143,8 +142,6 @@ const ClientListPage: React.FC = () => {
       {/* 사이드바 */}
       <Sidebar 
         userType="expert" 
-        isCollapsed={sidebarCollapsed}
-        onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
       />
 
       {/* 메인 콘텐츠 */}

@@ -33,7 +33,6 @@ interface AdminUser {
 
 const AdminPermissionsPage: React.FC = () => {
   const router = useRouter();
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [activeTab, setActiveTab] = useState<'roles' | 'permissions' | 'users'>('roles');
   const [selectedRole, setSelectedRole] = useState<Role | null>(null);
   const [showRoleModal, setShowRoleModal] = useState(false);
@@ -343,8 +342,6 @@ const AdminPermissionsPage: React.FC = () => {
       {/* 사이드바 */}
       <Sidebar 
         userType="super_admin" 
-        isCollapsed={sidebarCollapsed}
-        onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
       />
 
       {/* 메인 콘텐츠 */}

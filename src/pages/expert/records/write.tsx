@@ -17,7 +17,6 @@ interface SessionTemplate {
 }
 
 const RecordWritePage: React.FC = () => {
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [selectedClient, setSelectedClient] = useState('');
   const [selectedTemplate, setSelectedTemplate] = useState('');
   const [sessionType, setSessionType] = useState<'video' | 'chat' | 'voice'>('video');
@@ -173,8 +172,6 @@ const RecordWritePage: React.FC = () => {
       {/* 사이드바 */}
       <Sidebar 
         userType="expert" 
-        isCollapsed={sidebarCollapsed}
-        onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
       />
 
       {/* 메인 콘텐츠 */}

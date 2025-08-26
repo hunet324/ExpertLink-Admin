@@ -1,6 +1,7 @@
 // 관리자 관련 API 서비스
 
 import { apiClient, tokenManager } from './api';
+import { UpdateExpertProfileRequest } from './expert';
 
 // 서버 카멜케이스 변경에 맞는 전문가 승인 타입 정의
 export interface ExpertApplication {
@@ -44,6 +45,39 @@ export interface DashboardStatsDto {
   pendingApprovals: number;
   monthlyRevenue: number;
   activeSessions: number;
+}
+
+export interface ScheduleData {
+  id: number;
+  title: string;
+  schedule_date: string;
+  start_time: string;
+  end_time: string;
+  status: 'available' | 'booked' | 'completed' | 'cancelled';
+  notes?: string;
+  expert: {
+    id: number;
+    name: string;
+    center: {
+      id: number;
+      name: string;
+    } | null;
+  } | null;
+  client: {
+    id: number;
+    name: string;
+  } | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ScheduleStats {
+  schedules: ScheduleData[];
+  totalSchedules: number;
+  availableSchedules: number;
+  bookedSchedules: number;
+  completedSchedules: number;
+  cancelledSchedules: number;
 }
 
 export class AdminService {
@@ -97,7 +131,7 @@ export class AdminService {
     try {
       const payload = JSON.parse(atob(currentToken.split('.')[1]));
       const adminTypes = ['super_admin', 'regional_manager', 'center_manager', 'staff'];
-      if (!adminTypes.includes(payload.user_type)) {
+      if (!adminTypes.includes(payload.userType)) {
         throw new Error('관리자 권한이 필요합니다.');
       }
     } catch (e) {
@@ -147,6 +181,55 @@ export class AdminService {
    */
   async updateUserStatus(userId: number, status: string): Promise<any> {
     return await apiClient.put(`/admin/users/${userId}/status`, { status });
+  }
+
+  /**
+   * 관리자가 전문가 프로필 업데이트
+   */
+  async updateExpertProfile(expertId: number, data: UpdateExpertProfileRequest): Promise<any> {
+    try {
+      console.group('🔧 Admin Expert Profile Update');
+      console.log('Expert ID:', expertId);
+      console.log('Update data:', data);
+      
+      const response = await apiClient.put(`/admin/experts/${expertId}/profile`, data);
+      
+      console.log('✅ Admin expert profile update successful');
+      console.groupEnd();
+      
+      return response;
+    } catch (error: any) {
+      console.error('❌ Admin expert profile update failed:', error);
+      console.groupEnd();
+      throw error;
+    }
+  }
+
+  /**
+   * 관리자용 전체 스케줄 조회
+   */
+  async getAllSchedules(centerId?: number): Promise<ScheduleStats> {
+    try {
+      const queryString = centerId ? `?centerId=${centerId}` : '';
+      const response = await apiClient.get<ScheduleStats>(`/admin/schedules${queryString}`);
+      return response;
+    } catch (error: any) {
+      console.error('스케줄 목록 조회 실패:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * 관리자용 스케줄 취소
+   */
+  async cancelSchedule(scheduleId: number): Promise<{ success: boolean; message: string }> {
+    try {
+      const response = await apiClient.put<{ success: boolean; message: string }>(`/admin/schedules/${scheduleId}/cancel`);
+      return response;
+    } catch (error: any) {
+      console.error('스케줄 취소 실패:', error);
+      throw error;
+    }
   }
 }
 

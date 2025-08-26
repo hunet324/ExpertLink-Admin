@@ -28,7 +28,6 @@ type StatusFilter = 'all' | 'pending' | 'approved' | 'rejected' | 'cancelled';
 
 const NewRequestsPage: React.FC = () => {
   const router = useRouter();
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>('all');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('pending');
   const [selectedRequests, setSelectedRequests] = useState<string[]>([]);
@@ -251,8 +250,6 @@ const NewRequestsPage: React.FC = () => {
       {/* 사이드바 */}
       <Sidebar 
         userType="expert" 
-        isCollapsed={sidebarCollapsed}
-        onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
       />
 
       {/* 메인 콘텐츠 */}

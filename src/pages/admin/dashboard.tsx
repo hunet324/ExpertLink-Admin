@@ -40,7 +40,6 @@ const AdminDashboard: React.FC = () => {
   const { user, isLoading } = useStore();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   const userType = getUserType(user);
 
@@ -256,8 +255,6 @@ const AdminDashboard: React.FC = () => {
       {/* Sidebar */}
       <Sidebar 
         userType={userType} 
-        isCollapsed={sidebarCollapsed}
-        onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
       />
 
       {/* Main Content */}
@@ -269,10 +266,6 @@ const AdminDashboard: React.FC = () => {
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-2xl font-bold text-gray-900 mb-2">
-                {userType === 'super_admin' ? '🌐 최고 관리자 대시보드' :
-                 userType === 'regional_manager' ? '🏗️ 지역 관리자 대시보드' :
-                 userType === 'center_manager' ? '🏢 센터 관리자 대시보드' :
-                 '📊 관리자 대시보드'}
               </h1>
               <div className="flex items-center gap-2">
                 <p className="text-gray-600">

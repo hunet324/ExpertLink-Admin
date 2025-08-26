@@ -40,7 +40,6 @@ interface Hospital {
 
 const HospitalManagementPage: React.FC = () => {
   const router = useRouter();
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | Hospital['status']>('all');
   const [typeFilter, setTypeFilter] = useState<'all' | Hospital['type']>('all');
@@ -357,8 +356,6 @@ const HospitalManagementPage: React.FC = () => {
       {/* 사이드바 */}
       <Sidebar 
         userType="super_admin" 
-        isCollapsed={sidebarCollapsed}
-        onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
       />
 
       {/* 메인 콘텐츠 */}

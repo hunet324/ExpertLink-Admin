@@ -64,12 +64,12 @@ const CenterExpertsPage: React.FC = () => {
       setLoadingExperts(true);
       // expert 타입이면서 center_id가 없거나 현재 센터가 아닌 사용자들 조회
       const response = await userService.getAllUsers({
-        user_type: 'expert',
+        userType: 'expert',
         limit: 100
       });
       
-      // center_id가 없는 전문가만 필터링 (아직 센터에 배정되지 않은 전문가)
-      const availableExpertsList = response.users.filter(user => !user.center_id);
+      // centerId가 없는 전문가만 필터링 (아직 센터에 배정되지 않은 전문가)
+      const availableExpertsList = response.users.filter(user => !user.centerId);
       setAvailableExperts(availableExpertsList);
     } catch (error) {
       console.error('전문가 목록 로드 실패:', error);

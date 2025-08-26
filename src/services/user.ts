@@ -8,12 +8,28 @@ export interface UserResponse {
   name: string;
   email: string;
   phone?: string;
-  user_type: UserType;
-  center_id?: number;
-  supervisor_id?: number;
+  userType: UserType;
+  centerId?: number;
+  supervisorId?: number;
   status: string;
-  created_at: string;
-  updated_at: string;
+  createdAt: string;
+  updatedAt: string;
+  
+  // 추가 통계 데이터
+  counselingCount?: number;
+  contentCount?: number;
+  psychTestCount?: number;
+  lastLoginAt?: string;
+  isVerified?: boolean;
+  
+  // 인증 상태
+  emailVerified?: boolean;
+  phoneVerified?: boolean;
+  
+  // 활동 통계
+  loginCount?: number;
+  totalSessions?: number;
+  totalPayments?: number;
 }
 
 export interface UserListResponse {
@@ -28,8 +44,8 @@ export interface AvailableManager {
   id: number;
   name: string;
   email: string;
-  user_type: UserType;
-  center_id?: number;
+  userType: UserType;
+  centerId?: number;
 }
 
 export const userService = {
@@ -37,17 +53,17 @@ export const userService = {
   async getAvailableManagers(): Promise<AvailableManager[]> {
     try {
       // center_manager 타입의 모든 사용자 조회 후 프론트에서 필터링
-      const response = await apiClient.get<UserListResponse>('/admin/users?user_type=center_manager&limit=100');
+      const response = await apiClient.get<UserListResponse>('/admin/users?userType=center_manager&limit=100');
       
-      // center_id가 없는 사용자만 필터링 (아직 센터를 관리하지 않는 사용자)
+      // centerId가 없는 사용자만 필터링 (아직 센터를 관리하지 않는 사용자)
       const availableManagers = response.users
-        .filter(user => !user.center_id) // center_id가 없는 사용자만
+        .filter(user => !user.centerId) // centerId가 없는 사용자만
         .map(user => ({
           id: user.id,
           name: user.name,
           email: user.email,
-          user_type: user.user_type,
-          center_id: user.center_id
+          userType: user.userType,
+          centerId: user.centerId
         }));
       
       return availableManagers;
@@ -62,7 +78,7 @@ export const userService = {
   async getAllUsers(params?: {
     page?: number;
     limit?: number;
-    user_type?: UserType;
+    userType?: UserType;
     search?: string;
     status?: string;
   }): Promise<UserListResponse> {
@@ -70,7 +86,7 @@ export const userService = {
     
     if (params?.page) queryParams.append('page', params.page.toString());
     if (params?.limit) queryParams.append('limit', params.limit.toString());
-    if (params?.user_type) queryParams.append('user_type', params.user_type);
+    if (params?.userType) queryParams.append('userType', params.userType);
     if (params?.search) queryParams.append('search', params.search);
     if (params?.status) queryParams.append('status', params.status);
 
@@ -123,10 +139,17 @@ export const userService = {
     name: string;
     email: string;
     phone?: string;
-    user_type: UserType;
-    center_id?: number;
-    supervisor_id?: number;
+    userType: UserType;
+    centerId?: number;
+    supervisorId?: number;
     status: string;
+    bio?: string;
+    specialties?: string[];
+    yearsExperience?: number;
+    hourlyRate?: number;
+    licenseType?: string;
+    licenseNumber?: string;
+    notes?: string;
   }>): Promise<UserResponse> {
     console.log(`사용자 ${id} 정보 수정 시도:`, data);
     

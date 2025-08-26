@@ -14,7 +14,6 @@ type StatusFilter = 'all' | 'pending' | 'under_review' | 'approved' | 'rejected'
 const ExpertApprovalPage: React.FC = () => {
   const router = useRouter();
   const { setPendingExpertsCount, isAuthenticated, user, getCurrentUser } = useStore();
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('pending');
   const [expertApplications, setExpertApplications] = useState<ExpertApplication[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -186,8 +185,6 @@ const ExpertApprovalPage: React.FC = () => {
     <div className="flex h-screen bg-background-50">
       <Sidebar 
         userType={userType} 
-        isCollapsed={sidebarCollapsed}
-        onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
       />
 
       <div className="flex-1 flex flex-col overflow-hidden">

@@ -28,7 +28,7 @@ const CenterStaffPage: React.FC = () => {
   const [addingStaff, setAddingStaff] = useState(false);
 
   const userType = getUserType(user);
-  const currentCenterId = user?.center_id || user?.centerId;
+  const currentCenterId = user?.centerId || user?.centerId;
 
   // 센터별 직원 목록 조회
   useEffect(() => {
@@ -55,14 +55,14 @@ const CenterStaffPage: React.FC = () => {
   const loadAvailableUsers = async () => {
     try {
       setLoadingUsers(true);
-      // general 타입이면서 center_id가 없는 사용자들 조회
+      // general 타입이면서 centerId가 없는 사용자들 조회
       const response = await userService.getAllUsers({
-        user_type: 'general',
+        userType: 'general',
         limit: 100
       });
       
-      // center_id가 없는 사용자만 필터링
-      const availableUsersList = response.users.filter(user => !user.center_id);
+      // centerId가 없는 사용자만 필터링
+      const availableUsersList = response.users.filter(user => !user.centerId);
       setAvailableUsers(availableUsersList);
     } catch (error) {
       console.error('사용자 목록 로드 실패:', error);
@@ -254,14 +254,14 @@ const CenterStaffPage: React.FC = () => {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                          getPermissionLevelColor(member.user_type as any)
+                          getPermissionLevelColor(member.userType as any)
                         }`}>
-                          {getAdminLevelText(member.user_type as any)}
+                          {getAdminLevelText(member.userType as any)}
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {member.supervisor_id ? (
-                          <span>ID: {member.supervisor_id}</span>
+                        {member.supervisorId ? (
+                          <span>ID: {member.supervisorId}</span>
                         ) : (
                           <span className="text-gray-400">없음</span>
                         )}
@@ -273,7 +273,7 @@ const CenterStaffPage: React.FC = () => {
                         <div className="flex items-center gap-2">
                           <span className="text-gray-400">상세</span>
                           {(userType === 'super_admin' || 
-                            (userType === 'center_manager' && member.user_type === 'staff')) && (
+                            (userType === 'center_manager' && member.userType === 'staff')) && (
                             <span className="text-gray-400">수정</span>
                           )}
                         </div>
@@ -312,7 +312,7 @@ const CenterStaffPage: React.FC = () => {
               <div className="ml-4">
                 <p className="text-sm font-medium text-gray-500">센터장</p>
                 <p className="text-2xl font-semibold text-gray-900">
-                  {staff.filter(s => s.user_type === 'center_manager').length}
+                  {staff.filter(s => s.userType === 'center_manager').length}
                 </p>
               </div>
             </div>
@@ -328,7 +328,7 @@ const CenterStaffPage: React.FC = () => {
               <div className="ml-4">
                 <p className="text-sm font-medium text-gray-500">직원</p>
                 <p className="text-2xl font-semibold text-gray-900">
-                  {staff.filter(s => s.user_type === 'staff').length}
+                  {staff.filter(s => s.userType === 'staff').length}
                 </p>
               </div>
             </div>

@@ -1,8 +1,8 @@
 // 센터 선택 드롭다운 컴포넌트
 
 import React, { useState, useEffect } from 'react';
-import { Center, UserType } from '@/types/user';
-import { centerService } from '@/services/center';
+import { UserType } from '@/types/user';
+import { centerService, Center } from '@/services/center';
 
 interface CenterSelectorProps {
   userType: UserType;
@@ -43,8 +43,8 @@ const CenterSelector: React.FC<CenterSelectorProps> = ({
         const managedCenters = await centerService.getManagedCenters();
         setCenters(managedCenters);
         
-        // 현재 센터가 설정되지 않았고, 센터가 하나만 있으면 자동 선택
-        if (!currentCenterId && managedCenters.length === 1) {
+        // 현재 센터가 설정되지 않았고, 센터가 하나만 있으며, showAllOption이 false인 경우에만 자동 선택
+        if (!currentCenterId && managedCenters.length === 1 && !showAllOption) {
           const centerId = managedCenters[0].id;
           setSelectedCenterId(centerId);
           onCenterChange(centerId);
@@ -58,7 +58,7 @@ const CenterSelector: React.FC<CenterSelectorProps> = ({
     };
 
     fetchCenters();
-  }, [userType, currentCenterId, onCenterChange]);
+  }, [userType, currentCenterId, onCenterChange, showAllOption]);
 
   // 센터 변경 핸들러
   const handleCenterChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
@@ -73,7 +73,7 @@ const CenterSelector: React.FC<CenterSelectorProps> = ({
     return null;
   }
 
-  // 센터가 하나뿐이고 showAllOption이 false인 경우 드롭다운 숨김
+  // 센터가 하나뿐이고 showAllOption이 false인 경우에만 드롭다운 숨김
   if (centers.length <= 1 && !showAllOption) {
     return null;
   }
@@ -91,7 +91,9 @@ const CenterSelector: React.FC<CenterSelectorProps> = ({
           ${error ? 'border-red-300' : ''}
         `}
       >
-        <option value="">{loading ? '로딩 중...' : placeholder}</option>
+        {!showAllOption && (
+          <option value="">{loading ? '로딩 중...' : placeholder}</option>
+        )}
         
         {showAllOption && (
           <option value="">전체 센터</option>

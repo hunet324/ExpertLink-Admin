@@ -27,12 +27,7 @@ const ResponsiveHeader: React.FC<ResponsiveHeaderProps> = ({
 
   const getDefaultTitle = () => {
     switch (userType) {
-      case 'super_admin': return '🌐 최고 관리자 대시보드';
-      case 'regional_manager': return '🏗️ 지역 관리자 대시보드';
-      case 'center_manager': return '🏢 센터 관리자 대시보드';
-      case 'staff': return '📊 관리자 대시보드';
-      case 'expert': return '👨‍⚕️ 전문가 대시보드';
-      default: return '📊 관리자 대시보드';
+      default: return '';
     }
   };
 

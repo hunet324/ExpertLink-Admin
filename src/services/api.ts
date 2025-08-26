@@ -86,10 +86,26 @@ export class ApiClient {
     
     // 토큰 먼저 확인
     const accessToken = tokenManager.getAccessToken();
+    const tokenInfo = accessToken ? (() => {
+      try {
+        const payload = JSON.parse(atob(accessToken.split('.')[1]));
+        const now = Date.now() / 1000;
+        return {
+          isExpired: payload.exp < now,
+          expiresIn: Math.max(0, payload.exp - now),
+          userType: payload.userType,
+          email: payload.email
+        };
+      } catch (e) {
+        return { error: 'Token parsing failed' };
+      }
+    })() : null;
+    
     console.log('API 클라이언트 토큰 체크:', {
       hasToken: !!accessToken,
       tokenSource: accessToken ? 'tokenManager' : 'none',
-      localStorageCheck: !!localStorage.getItem('expertlink_access_token')
+      localStorageCheck: !!localStorage.getItem('expertlink_access_token'),
+      tokenInfo
     });
 
     // 기본 헤더 설정 (Authorization 헤더를 먼저 설정)
@@ -105,11 +121,11 @@ export class ApiClient {
       // 토큰에서 사용자 정보 추출하여 센터 정보 헤더 추가
       try {
         const payload = JSON.parse(atob(accessToken.split('.')[1]));
-        if (payload.center_id) {
-          headers['X-Center-Id'] = payload.center_id.toString();
+        if (payload.centerId) {
+          headers['X-Center-Id'] = payload.centerId.toString();
         }
-        if (payload.user_type) {
-          headers['X-User-Type'] = payload.user_type;
+        if (payload.userType) {
+          headers['X-User-Type'] = payload.userType;
         }
       } catch (e) {
         console.warn('토큰에서 사용자 정보 추출 실패:', e);
@@ -132,29 +148,47 @@ export class ApiClient {
       headers,
     };
 
-    // 단순화된 디버깅 로그
-    console.log('API Request:', { url, method: config.method, hasToken: !!accessToken });
+    // 상세한 디버깅 로그
+    console.group(`🌐 API Request: ${config.method?.toUpperCase()} ${url}`);
+    console.log('Request Details:', {
+      url,
+      method: config.method || 'GET',
+      hasToken: !!accessToken,
+      headers: Object.keys(headers),
+      body: config.body ? JSON.parse(config.body as string) : 'No body'
+    });
     
     if (accessToken) {
-      console.log('Authorization Header:', headers.Authorization?.substring(0, 20) + '...');
+      console.log('Authorization Header:', headers.Authorization?.substring(0, 30) + '...');
       try {
         const payload = JSON.parse(atob(accessToken.split('.')[1]));
-        console.log('토큰 정보:', { 
-          user_type: payload.user_type, 
+        console.log('Token Payload:', { 
+          userType: payload.userType, 
           email: payload.email,
-          exp: new Date(payload.exp * 1000).toLocaleString()
+          centerId: payload.centerId,
+          exp: new Date(payload.exp * 1000).toLocaleString(),
+          isExpired: payload.exp * 1000 < Date.now()
         });
       } catch (e) {
         console.warn('토큰 디코딩 실패:', e);
       }
     } else {
-      console.warn('⚠️ API 요청에 토큰이 없습니다!');
+      console.error('❌ API 요청에 토큰이 없습니다! 인증이 필요한 요청일 수 있습니다.');
     }
+    console.groupEnd();
 
     try {
+      console.log('⏳ Sending request...');
       const response = await fetch(url, config);
       
-      console.log('API Response:', response.status, response.statusText);
+      console.group(`📡 API Response: ${response.status} ${response.statusText}`);
+      console.log('Response Details:', {
+        status: response.status,
+        statusText: response.statusText,
+        ok: response.ok,
+        headers: Object.fromEntries(response.headers.entries()),
+        url: response.url
+      });
       
       // 401 에러 시 단순히 로그인 페이지로 리다이렉트 (갱신 시도 없음)
       if (response.status === 401) {
@@ -182,14 +216,21 @@ export class ApiClient {
 
       // 응답이 비어있는 경우 (204 No Content 등)
       if (response.status === 204) {
+        console.log('✅ Success: No Content (204)');
+        console.groupEnd();
         return {} as T;
       }
 
       const responseData = await response.json();
-      console.log('API Success:', responseData);
+      console.log('✅ Success Response Data:', responseData);
+      console.groupEnd();
       return responseData;
     } catch (error) {
-      console.error('Network Error:', error);
+      console.group('❌ Network/Fetch Error');
+      console.error('Error Details:', error);
+      console.error('Error Type:', error?.constructor?.name);
+      console.error('Error Message:', (error as Error)?.message);
+      console.groupEnd();
       
       // 네트워크 오류 등
       if (error instanceof TypeError) {
@@ -227,7 +268,85 @@ export class ApiClient {
   async delete<T>(endpoint: string, options?: RequestInit): Promise<T> {
     return this.request<T>(endpoint, { ...options, method: 'DELETE' });
   }
+
+  async patch<T>(endpoint: string, data?: any, options?: RequestInit): Promise<T> {
+    return this.request<T>(endpoint, {
+      ...options,
+      method: 'PATCH',
+      body: data ? JSON.stringify(data) : undefined,
+    });
+  }
 }
+
+// 네트워크 디버깅 헬퍼 함수
+export const networkDebugger = {
+  async testConnectivity(baseURL: string = API_BASE_URL): Promise<boolean> {
+    console.group('🌍 Network Connectivity Test');
+    try {
+      console.log('Testing connectivity to:', baseURL);
+      
+      // OPTIONS 요청으로 CORS 프리플라이트 테스트
+      const optionsResponse = await fetch(`${baseURL}/experts/profile`, {
+        method: 'OPTIONS',
+        headers: {
+          'Origin': window.location.origin,
+          'Access-Control-Request-Method': 'PUT',
+          'Access-Control-Request-Headers': 'Content-Type,Authorization'
+        }
+      });
+      
+      console.log('OPTIONS response:', {
+        status: optionsResponse.status,
+        headers: Object.fromEntries(optionsResponse.headers.entries())
+      });
+      
+      console.groupEnd();
+      return optionsResponse.ok;
+    } catch (error) {
+      console.error('Connectivity test failed:', error);
+      console.groupEnd();
+      return false;
+    }
+  },
+  
+  async testWithDirectAPI(): Promise<void> {
+    console.group('🔧 Direct API Test');
+    try {
+      const directURL = 'http://kkssyy.ipdisk.co.kr:5700';
+      console.log('Testing direct connection to:', directURL);
+      
+      const token = tokenManager.getAccessToken();
+      if (!token) {
+        console.error('No token available for direct API test');
+        console.groupEnd();
+        return;
+      }
+      
+      const response = await fetch(`${directURL}/experts/profile`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        }
+      });
+      
+      console.log('Direct API response:', {
+        status: response.status,
+        statusText: response.statusText,
+        headers: Object.fromEntries(response.headers.entries())
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        console.log('Direct API data:', data);
+      }
+      
+    } catch (error) {
+      console.error('Direct API test failed:', error);
+    }
+    console.groupEnd();
+  }
+};
 
 // 기본 API 클라이언트 인스턴스
 export const apiClient = new ApiClient();

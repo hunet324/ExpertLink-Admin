@@ -27,7 +27,6 @@ interface ScheduleDetail {
 const ScheduleDetailPage: React.FC = () => {
   const router = useRouter();
   const { id } = router.query;
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
 
   // 샘플 데이터 - 실제로는 API에서 가져올 데이터
@@ -153,8 +152,6 @@ const ScheduleDetailPage: React.FC = () => {
       {/* 사이드바 */}
       <Sidebar 
         userType="expert" 
-        isCollapsed={sidebarCollapsed}
-        onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
       />
 
       {/* 메인 콘텐츠 */}

@@ -1,278 +1,166 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import Sidebar from '@/components/Layout/Sidebar';
+import { systemLogService, SystemLogRecord, SystemLogStats, SystemLogFilters, LogLevel, LogCategory } from '@/services/system-logs';
 
-interface SystemLog {
-  id: string;
-  timestamp: string;
-  level: 'info' | 'warn' | 'error' | 'debug';
-  category: 'auth' | 'payment' | 'system' | 'user' | 'expert' | 'admin' | 'api' | 'database';
-  action: string;
-  userId?: string;
-  userType?: 'client' | 'expert' | 'admin' | 'super_admin';
-  userName?: string;
-  ipAddress: string;
-  userAgent: string;
-  details: string;
-  requestId?: string;
-  responseTime?: number;
-  statusCode?: number;
-  errorMessage?: string;
-  stackTrace?: string;
-}
+// SystemLogRecord interface는 이제 서비스에서 import됨
 
 const SystemLogsPage: React.FC = () => {
   const router = useRouter();
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [levelFilter, setLevelFilter] = useState<'all' | SystemLog['level']>('all');
-  const [categoryFilter, setCategoryFilter] = useState<'all' | SystemLog['category']>('all');
+  const [levelFilter, setLevelFilter] = useState<'all' | LogLevel>('all');
+  const [categoryFilter, setCategoryFilter] = useState<'all' | LogCategory>('all');
   const [dateRange, setDateRange] = useState({
-    start: '2024-08-12',
-    end: '2024-08-12'
+    start: '2024-08-25',
+    end: '2024-08-25'
   });
-  const [selectedLog, setSelectedLog] = useState<SystemLog | null>(null);
+  const [selectedLog, setSelectedLog] = useState<SystemLogRecord | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
-
-  // 시스템 로그 샘플 데이터
-  const [systemLogs, setSystemLogs] = useState<SystemLog[]>([
-    {
-      id: 'log_001',
-      timestamp: '2024-08-12T15:30:45.123Z',
-      level: 'info',
-      category: 'auth',
-      action: 'USER_LOGIN',
-      userId: 'user_001',
-      userType: 'client',
-      userName: '김내담자',
-      ipAddress: '192.168.1.100',
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-      details: '사용자 로그인 성공',
-      requestId: 'req_20240812_001',
-      responseTime: 150,
-      statusCode: 200
-    },
-    {
-      id: 'log_002',
-      timestamp: '2024-08-12T15:25:32.456Z',
-      level: 'error',
-      category: 'payment',
-      action: 'PAYMENT_FAILED',
-      userId: 'user_002',
-      userType: 'client',
-      userName: '박환자',
-      ipAddress: '192.168.1.101',
-      userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X)',
-      details: '결제 처리 중 오류 발생 - 카드 한도 초과',
-      requestId: 'req_20240812_002',
-      responseTime: 3000,
-      statusCode: 400,
-      errorMessage: 'Payment declined: Insufficient funds',
-      stackTrace: 'at PaymentService.processPayment (payment.service.js:45)\n  at PaymentController.createPayment (payment.controller.js:23)'
-    },
-    {
-      id: 'log_003',
-      timestamp: '2024-08-12T15:20:18.789Z',
-      level: 'warn',
-      category: 'system',
-      action: 'HIGH_CPU_USAGE',
-      ipAddress: '10.0.1.50',
-      userAgent: 'System Monitor',
-      details: 'CPU 사용률이 85%를 초과했습니다',
-      responseTime: 0
-    },
-    {
-      id: 'log_004',
-      timestamp: '2024-08-12T15:15:22.345Z',
-      level: 'info',
-      category: 'expert',
-      action: 'EXPERT_STATUS_CHANGE',
-      userId: 'expert_001',
-      userType: 'expert',
-      userName: '이상담사',
-      ipAddress: '192.168.1.102',
-      userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)',
-      details: '전문가 상태를 "상담 가능"으로 변경',
-      requestId: 'req_20240812_003',
-      responseTime: 200,
-      statusCode: 200
-    },
-    {
-      id: 'log_005',
-      timestamp: '2024-08-12T15:10:15.567Z',
-      level: 'debug',
-      category: 'api',
-      action: 'API_REQUEST',
-      userId: 'user_003',
-      userType: 'client',
-      userName: '정고객',
-      ipAddress: '192.168.1.103',
-      userAgent: 'ExpertLink Mobile App v1.2.0',
-      details: 'GET /api/experts?category=psychology&available=true',
-      requestId: 'req_20240812_004',
-      responseTime: 120,
-      statusCode: 200
-    },
-    {
-      id: 'log_006',
-      timestamp: '2024-08-12T15:05:33.890Z',
-      level: 'error',
-      category: 'database',
-      action: 'DATABASE_CONNECTION_ERROR',
-      ipAddress: '10.0.1.10',
-      userAgent: 'Database Service',
-      details: '데이터베이스 연결 실패 - 연결 풀 고갈',
-      errorMessage: 'Connection pool exhausted. Unable to establish connection to database',
-      stackTrace: 'at DatabasePool.getConnection (db.pool.js:78)\n  at UserRepository.findById (user.repository.js:12)'
-    },
-    {
-      id: 'log_007',
-      timestamp: '2024-08-12T15:00:45.123Z',
-      level: 'info',
-      category: 'admin',
-      action: 'ADMIN_LOGIN',
-      userId: 'admin_001',
-      userType: 'super_admin',
-      userName: '김관리자',
-      ipAddress: '192.168.1.200',
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
-      details: '관리자 로그인 성공',
-      requestId: 'req_20240812_005',
-      responseTime: 180,
-      statusCode: 200
-    },
-    {
-      id: 'log_008',
-      timestamp: '2024-08-12T14:55:12.456Z',
-      level: 'warn',
-      category: 'user',
-      action: 'MULTIPLE_LOGIN_ATTEMPTS',
-      userId: 'user_004',
-      userType: 'client',
-      userName: '홍길동',
-      ipAddress: '192.168.1.104',
-      userAgent: 'Mozilla/5.0 (Linux; Android 10)',
-      details: '5분 내 로그인 시도 5회 - 계정 일시 잠금',
-      requestId: 'req_20240812_006',
-      responseTime: 100,
-      statusCode: 429
-    }
-  ]);
-
-  const getLevelColor = (level: SystemLog['level']) => {
-    const levelColors = {
-      'info': 'bg-primary text-white',
-      'warn': 'bg-secondary-400 text-white',
-      'error': 'bg-error text-white',
-      'debug': 'bg-background-400 text-white'
-    };
-    return levelColors[level];
-  };
-
-  const getLevelIcon = (level: SystemLog['level']) => {
-    const levelIcons = {
-      'info': 'ℹ️',
-      'warn': '⚠️',
-      'error': '❌',
-      'debug': '🐛'
-    };
-    return levelIcons[level];
-  };
-
-  const getCategoryColor = (category: SystemLog['category']) => {
-    const categoryColors = {
-      'auth': 'bg-accent-100 text-accent-700',
-      'payment': 'bg-primary-100 text-primary-700',
-      'system': 'bg-error-100 text-error-700',
-      'user': 'bg-secondary-100 text-secondary-700',
-      'expert': 'bg-logo-point/20 text-logo-main',
-      'admin': 'bg-purple-100 text-purple-700',
-      'api': 'bg-green-100 text-green-700',
-      'database': 'bg-orange-100 text-orange-700'
-    };
-    return categoryColors[category];
-  };
-
-  const getCategoryLabel = (category: SystemLog['category']) => {
-    const categoryLabels = {
-      'auth': '인증',
-      'payment': '결제',
-      'system': '시스템',
-      'user': '사용자',
-      'expert': '전문가',
-      'admin': '관리자',
-      'api': 'API',
-      'database': '데이터베이스'
-    };
-    return categoryLabels[category];
-  };
-
-  const filteredLogs = systemLogs.filter(log => {
-    const matchesSearch = log.action.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         log.details.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         (log.userName && log.userName.toLowerCase().includes(searchQuery.toLowerCase())) ||
-                         log.ipAddress.includes(searchQuery);
-    
-    const matchesLevel = levelFilter === 'all' || log.level === levelFilter;
-    const matchesCategory = categoryFilter === 'all' || log.category === categoryFilter;
-    
-    const logDate = new Date(log.timestamp).toISOString().split('T')[0];
-    const matchesDateRange = logDate >= dateRange.start && logDate <= dateRange.end;
-    
-    return matchesSearch && matchesLevel && matchesCategory && matchesDateRange;
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string>('');
+  const [systemLogs, setSystemLogs] = useState<SystemLogRecord[]>([]);
+  const [systemLogStats, setSystemLogStats] = useState<SystemLogStats | null>(null);
+  const [pagination, setPagination] = useState({
+    page: 1,
+    limit: 20,
+    total: 0,
+    totalPages: 0
   });
 
-  const getFilterCount = (level: 'all' | SystemLog['level']) => {
-    if (level === 'all') return systemLogs.length;
-    return systemLogs.filter(log => log.level === level).length;
+  // 시스템 로그 및 통계 로딩
+  useEffect(() => {
+    loadSystemLogs();
+    loadStats();
+  }, [levelFilter, categoryFilter, dateRange, pagination.page]);
+
+  const loadSystemLogs = async () => {
+    setLoading(true);
+    try {
+      const filters: SystemLogFilters = {
+        search: searchQuery,
+        level: levelFilter === 'all' ? undefined : levelFilter,
+        category: categoryFilter === 'all' ? undefined : categoryFilter,
+        start_date: dateRange.start,
+        end_date: dateRange.end,
+        page: pagination.page,
+        limit: pagination.limit
+      };
+
+      const response = await systemLogService.getSystemLogs(filters);
+      console.log('시스템 로그 API 응답:', response);
+      
+      setSystemLogs(response.data);
+      setPagination(response.pagination);
+      setError('');
+    } catch (err: any) {
+      console.error('시스템 로그 조회 실패:', err);
+      setError(err.message || '시스템 로그를 불러올 수 없습니다.');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const getLogStats = () => {
-    const today = new Date().toISOString().split('T')[0];
-    const todayLogs = systemLogs.filter(log => log.timestamp.startsWith(today));
-    
-    return {
-      total: systemLogs.length,
-      today: todayLogs.length,
-      errors: systemLogs.filter(log => log.level === 'error').length,
-      warnings: systemLogs.filter(log => log.level === 'warn').length
-    };
+  const loadStats = async () => {
+    try {
+      console.log('시스템 로그 통계 API 호출:', { dateRange });
+      const stats = await systemLogService.getSystemLogStats(dateRange.start, dateRange.end);
+      console.log('시스템 로그 통계 API 응답:', stats);
+      setSystemLogStats(stats);
+    } catch (err: any) {
+      console.error('시스템 로그 통계 조회 실패:', err);
+    }
   };
 
-  const stats = getLogStats();
+  const handleSearch = () => {
+    setPagination(prev => ({ ...prev, page: 1 }));
+    loadSystemLogs();
+  };
 
-  const openDetailModal = (log: SystemLog) => {
+  const getLevelColor = systemLogService.getLevelColor;
+
+  const getLevelIcon = systemLogService.getLevelIcon;
+
+  const getCategoryColor = systemLogService.getCategoryColor;
+
+  const getCategoryLabel = systemLogService.getCategoryLabel;
+
+  // API에서 이미 필터링되어 오므로 그대로 사용
+  const filteredLogs = systemLogs;
+
+  const getFilterCount = (level: 'all' | LogLevel) => {
+    if (!systemLogStats) return 0;
+    if (level === 'all') return systemLogStats.total;
+    return systemLogStats.levelStats[level] || 0;
+  };
+
+  const stats = systemLogStats || {
+    total: 0,
+    today: 0,
+    errors: 0,
+    warnings: 0
+  };
+
+  const openDetailModal = (log: SystemLogRecord) => {
     setSelectedLog(log);
     setShowDetailModal(true);
   };
 
-  const exportLogs = () => {
-    // 로그 내보내기 기능 (실제 구현에서는 CSV/JSON 다운로드)
-    alert('로그 내보내기 기능이 실행됩니다.');
-  };
-
-  const clearOldLogs = () => {
-    if (confirm('30일 이전 로그를 삭제하시겠습니까?')) {
-      const thirtyDaysAgo = new Date();
-      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+  const exportLogs = async () => {
+    try {
+      setLoading(true);
+      const filters: SystemLogFilters = {
+        search: searchQuery,
+        level: levelFilter === 'all' ? undefined : levelFilter,
+        category: categoryFilter === 'all' ? undefined : categoryFilter,
+        start_date: dateRange.start,
+        end_date: dateRange.end
+      };
       
-      setSystemLogs(prev => prev.filter(log => new Date(log.timestamp) > thirtyDaysAgo));
-      alert('오래된 로그가 삭제되었습니다.');
+      const result = await systemLogService.exportSystemLogs(filters);
+      
+      if (result.success) {
+        alert(`로그 내보내기 성공: ${result.fileName}`);
+        // 실제 구현에서는 다운로드 링크 제공
+        // window.open(result.downloadUrl, '_blank');
+      } else {
+        alert('로그 내보내기에 실패했습니다.');
+      }
+    } catch (err: any) {
+      console.error('로그 내보내기 실패:', err);
+      alert(err.message || '로그 내보내기에 실패했습니다.');
+    } finally {
+      setLoading(false);
     }
   };
 
-  const formatTimestamp = (timestamp: string) => {
-    return new Date(timestamp).toLocaleString('ko-KR');
+  const clearOldLogs = async () => {
+    const days = 30;
+    if (confirm(`${days}일 이전 로그를 삭제하시겠습니까?`)) {
+      try {
+        setLoading(true);
+        const result = await systemLogService.cleanupOldLogs(days);
+        
+        if (result.success) {
+          alert(result.message);
+          // 로그 목록 및 통계 새로고침
+          loadSystemLogs();
+          loadStats();
+        }
+      } catch (err: any) {
+        console.error('로그 정리 실패:', err);
+        alert(err.message || '로그 정리에 실패했습니다.');
+      } finally {
+        setLoading(false);
+      }
+    }
   };
+
+  const formatTimestamp = systemLogService.formatTimestamp;
 
   return (
     <div className="flex h-screen bg-background-50">
       {/* 사이드바 */}
-      <Sidebar 
-        userType="super_admin" 
-        isCollapsed={sidebarCollapsed}
-        onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
-      />
+      <Sidebar userType="super_admin" />
 
       {/* 메인 콘텐츠 */}
       <div className="flex-1 flex flex-col overflow-hidden">
@@ -317,6 +205,16 @@ const SystemLogsPage: React.FC = () => {
             </div>
           </div>
         </header>
+
+        {/* 에러 메시지 */}
+        {error && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4 mx-6 mb-6">
+            <div className="flex items-center">
+              <span className="text-red-500 mr-2">⚠️</span>
+              <p className="text-red-700">{error}</p>
+            </div>
+          </div>
+        )}
 
         {/* 메인 콘텐츠 영역 */}
         <main className="flex-1 overflow-y-auto p-6">
@@ -444,7 +342,7 @@ const SystemLogsPage: React.FC = () => {
                   {filteredLogs.map((log, index) => (
                     <tr key={log.id} className={`border-b border-background-100 hover:bg-background-50 ${index % 2 === 0 ? 'bg-white' : 'bg-background-25'}`}>
                       <td className="py-3 px-4">
-                        <div className="text-caption font-mono text-secondary-700">
+                        <div className="text-caption font-mono text-secondary-700 whitespace-pre-line">
                           {formatTimestamp(log.timestamp)}
                         </div>
                       </td>
@@ -496,7 +394,14 @@ const SystemLogsPage: React.FC = () => {
               </table>
             </div>
 
-            {filteredLogs.length === 0 && (
+            {loading && (
+              <div className="p-12 text-center">
+                <div className="animate-spin h-12 w-12 border-4 border-primary border-t-transparent rounded-full mx-auto mb-4"></div>
+                <p className="text-secondary-600">시스템 로그를 불러오는 중...</p>
+              </div>
+            )}
+
+            {!loading && filteredLogs.length === 0 && (
               <div className="p-12 text-center">
                 <span className="text-6xl mb-4 block">📋</span>
                 <h3 className="text-h4 font-semibold text-secondary-600 mb-2">
@@ -508,6 +413,60 @@ const SystemLogsPage: React.FC = () => {
               </div>
             )}
           </div>
+
+          {/* 페이지네이션 */}
+          {!loading && pagination.totalPages > 1 && (
+            <div className="bg-white rounded-custom shadow-soft p-4 mt-6 flex items-center justify-between">
+              <div className="text-caption text-secondary-600">
+                전체 {pagination.total}건 중 {((pagination.page - 1) * pagination.limit) + 1}-{Math.min(pagination.page * pagination.limit, pagination.total)}건 표시
+              </div>
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={() => setPagination(prev => ({ ...prev, page: Math.max(1, prev.page - 1) }))}
+                  disabled={pagination.page <= 1 || loading}
+                  className="px-3 py-2 border border-background-300 rounded-lg text-caption disabled:opacity-50 disabled:cursor-not-allowed hover:bg-background-50"
+                >
+                  이전
+                </button>
+                
+                {Array.from({ length: Math.min(5, pagination.totalPages) }, (_, i) => {
+                  let pageNum;
+                  if (pagination.totalPages <= 5) {
+                    pageNum = i + 1;
+                  } else if (pagination.page <= 3) {
+                    pageNum = i + 1;
+                  } else if (pagination.page >= pagination.totalPages - 2) {
+                    pageNum = pagination.totalPages - 4 + i;
+                  } else {
+                    pageNum = pagination.page - 2 + i;
+                  }
+                  
+                  return (
+                    <button
+                      key={pageNum}
+                      onClick={() => setPagination(prev => ({ ...prev, page: pageNum }))}
+                      disabled={loading}
+                      className={`px-3 py-2 rounded-lg text-caption ${
+                        pagination.page === pageNum
+                          ? 'bg-primary text-white'
+                          : 'border border-background-300 hover:bg-background-50 disabled:opacity-50'
+                      }`}
+                    >
+                      {pageNum}
+                    </button>
+                  );
+                })}
+                
+                <button
+                  onClick={() => setPagination(prev => ({ ...prev, page: Math.min(prev.totalPages, prev.page + 1) }))}
+                  disabled={pagination.page >= pagination.totalPages || loading}
+                  className="px-3 py-2 border border-background-300 rounded-lg text-caption disabled:opacity-50 disabled:cursor-not-allowed hover:bg-background-50"
+                >
+                  다음
+                </button>
+              </div>
+            </div>
+          )}
         </main>
       </div>
 
@@ -533,7 +492,7 @@ const SystemLogsPage: React.FC = () => {
                   <div className="grid grid-cols-2 gap-4">
                     <div className="bg-background-50 p-3 rounded-lg">
                       <div className="text-caption text-secondary-500">시간</div>
-                      <div className="text-body font-mono text-secondary-700">{formatTimestamp(selectedLog.timestamp)}</div>
+                      <div className="text-body font-mono text-secondary-700 whitespace-pre-line">{formatTimestamp(selectedLog.timestamp)}</div>
                     </div>
                     <div className="bg-background-50 p-3 rounded-lg">
                       <div className="text-caption text-secondary-500">로그 ID</div>

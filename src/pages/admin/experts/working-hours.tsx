@@ -35,20 +35,38 @@ const ExpertWorkingHoursPage: React.FC = () => {
   // 센터별 전문가 목록 조회
   useEffect(() => {
     const fetchExperts = async () => {
-      if (!selectedCenterId) return;
-
       try {
-        const expertList = await centerService.getCenterExperts(selectedCenterId);
+        let expertList: CenterExpertResponse[] = [];
+        
+        console.log('전문가 조회 시작 - selectedCenterId:', selectedCenterId);
+        
+        if (selectedCenterId) {
+          // 특정 센터의 전문가 조회
+          console.log('특정 센터의 전문가 조회:', selectedCenterId);
+          expertList = await centerService.getCenterExperts(selectedCenterId);
+        } else {
+          // 전체 센터의 전문가 조회 (전체 선택 시)
+          console.log('전체 센터의 전문가 조회');
+          expertList = await centerService.getAllManagedExperts();
+        }
+        
+        console.log('조회된 전문가 목록:', expertList);
         setExperts(expertList);
         setError('');
         
-        // 첫 번째 전문가 자동 선택
+        // 첫 번째 전문가 자동 선택 (기존 선택이 없을 때만)
         if (expertList.length > 0 && !selectedExpertId) {
           setSelectedExpertId(expertList[0].id);
+        }
+        
+        // 기존 선택된 전문가가 새 목록에 없으면 초기화
+        if (selectedExpertId && !expertList.find(e => e.id === selectedExpertId)) {
+          setSelectedExpertId(expertList.length > 0 ? expertList[0].id : null);
         }
       } catch (err: any) {
         console.error('전문가 목록 조회 실패:', err);
         setError(err.message || '전문가 목록을 불러올 수 없습니다.');
+        setExperts([]);
       }
     };
 
@@ -68,25 +86,7 @@ const ExpertWorkingHoursPage: React.FC = () => {
           dateRange.endDate
         );
         
-        // Mock 데이터 (실제 API 응답 대신)
-        const mockHours: WorkingHoursResponse[] = [];
-        const start = new Date(dateRange.startDate);
-        const end = new Date(dateRange.endDate);
-        
-        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-          if (Math.random() > 0.3) { // 70% 확률로 근무
-            mockHours.push({
-              expertId: selectedExpertId,
-              date: d.toISOString().split('T')[0],
-              startTime: '09:00',
-              endTime: `${17 + Math.floor(Math.random() * 3)}:${Math.random() > 0.5 ? '00' : '30'}`,
-              totalHours: 8 + Math.random() * 2,
-              breakTime: 60
-            });
-          }
-        }
-        
-        setWorkingHours(mockHours);
+        setWorkingHours(hours);
         setError('');
       } catch (err: any) {
         console.error('근무시간 조회 실패:', err);
@@ -127,33 +127,12 @@ const ExpertWorkingHoursPage: React.FC = () => {
                 >
                   ← 센터 목록
                 </Link>
-                <Link
-                  href="/admin/experts/vacation"
-                  className="text-gray-500 hover:text-gray-600 text-sm flex items-center gap-1"
-                >
-                  휴가 관리
-                </Link>
               </div>
               <h1 className="text-2xl font-bold text-gray-900 mb-2">전문가 근무시간 모니터링</h1>
               <div className="flex items-center gap-2">
                 <p className="text-gray-600">전문가 근무시간 조회 및 분석</p>
                 <AdminLevelBadge userType={userType} size="sm" />
               </div>
-            </div>
-            
-            <div className="flex items-center gap-2">
-              <Link
-                href="/admin/experts/schedule"
-                className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg transition-colors"
-              >
-                스케줄 관리
-              </Link>
-              <Link
-                href="/admin/experts/vacation"
-                className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg transition-colors"
-              >
-                휴가 관리
-              </Link>
             </div>
           </div>
         </div>
@@ -171,6 +150,7 @@ const ExpertWorkingHoursPage: React.FC = () => {
                 currentCenterId={selectedCenterId ?? undefined}
                 onCenterChange={setSelectedCenterId}
                 placeholder="센터를 선택하세요"
+                showAllOption={true}
               />
             </div>
 
@@ -181,12 +161,12 @@ const ExpertWorkingHoursPage: React.FC = () => {
                 value={selectedExpertId || ''}
                 onChange={(e) => setSelectedExpertId(parseInt(e.target.value) || null)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                disabled={!selectedCenterId}
+                disabled={experts.length === 0}
               >
                 <option value="">전문가를 선택하세요</option>
                 {experts.map(expert => (
                   <option key={expert.id} value={expert.id}>
-                    {expert.name}
+                    {expert.name}{expert.centerName ? ` (${expert.centerName})` : ''}
                   </option>
                 ))}
               </select>

@@ -42,7 +42,6 @@ interface Expert {
 
 const ExpertSystemPage: React.FC = () => {
   const router = useRouter();
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive' | 'suspended'>('all');
   const [selectedExpert, setSelectedExpert] = useState<Expert | null>(null);
@@ -228,8 +227,6 @@ const ExpertSystemPage: React.FC = () => {
       {/* 사이드바 */}
       <Sidebar 
         userType="super_admin" 
-        isCollapsed={sidebarCollapsed}
-        onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
       />
 
       {/* 메인 콘텐츠 */}

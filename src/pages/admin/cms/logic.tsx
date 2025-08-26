@@ -1,239 +1,81 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import Sidebar from '@/components/Layout/Sidebar';
-
-interface LogicRule {
-  id: string;
-  name: string;
-  description?: string;
-  sourceQuestionId: string;
-  condition: {
-    type: 'equals' | 'not_equals' | 'greater_than' | 'less_than' | 'contains' | 'in_range';
-    value: string | number | string[] | { min: number; max: number };
-    operator?: 'and' | 'or';
-  };
-  action: {
-    type: 'show_question' | 'hide_question' | 'jump_to_question' | 'end_survey' | 'show_message';
-    targetQuestionId?: string;
-    message?: string;
-  };
-  priority: number;
-  isActive: boolean;
-  createdAt: string;
-  updatedAt: string;
-}
-
-interface Question {
-  id: string;
-  title: string;
-  type: 'multiple_choice' | 'single_choice' | 'text' | 'scale' | 'yes_no';
-  category: string;
-  order: number;
-  options?: {
-    id: string;
-    text: string;
-    value: string | number;
-  }[];
-}
+import { logicService, LogicRule, CreateLogicRuleRequest, UpdateLogicRuleRequest } from '@/services/logic';
+import { surveyService, PsychTest, PsychQuestion } from '@/services/survey';
 
 const LogicManagementPage: React.FC = () => {
   const router = useRouter();
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [selectedQuestionId, setSelectedQuestionId] = useState<string>('');
+  const [selectedTestId, setSelectedTestId] = useState<number | null>(null);
+  const [selectedQuestionId, setSelectedQuestionId] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedLogicRule, setSelectedLogicRule] = useState<LogicRule | null>(null);
   const [showRuleModal, setShowRuleModal] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string>('');
+  
+  // 데이터 상태
+  const [psychTests, setPsychTests] = useState<PsychTest[]>([]);
+  const [questions, setQuestions] = useState<PsychQuestion[]>([]);
+  const [logicRules, setLogicRules] = useState<LogicRule[]>([]);
 
-  // 설문 문항 샘플 데이터
-  const questions: Question[] = [
-    {
-      id: 'q_001',
-      title: '현재 나이를 선택해 주세요',
-      type: 'single_choice',
-      category: 'basic_info',
-      order: 1,
-      options: [
-        { id: 'age_10s', text: '10대', value: '10s' },
-        { id: 'age_20s', text: '20대', value: '20s' },
-        { id: 'age_30s', text: '30대', value: '30s' },
-        { id: 'age_40s', text: '40대', value: '40s' },
-        { id: 'age_50plus', text: '50대 이상', value: '50plus' }
-      ]
-    },
-    {
-      id: 'q_002',
-      title: '성별을 선택해 주세요',
-      type: 'single_choice',
-      category: 'basic_info',
-      order: 2,
-      options: [
-        { id: 'gender_male', text: '남성', value: 'male' },
-        { id: 'gender_female', text: '여성', value: 'female' },
-        { id: 'gender_other', text: '기타', value: 'other' }
-      ]
-    },
-    {
-      id: 'q_003',
-      title: '최근 2주간 우울감을 얼마나 자주 경험하셨나요?',
-      type: 'scale',
-      category: 'psychological',
-      order: 3,
-      options: [
-        { id: 'depression_1', text: '전혀 없음', value: 1 },
-        { id: 'depression_2', text: '거의 없음', value: 2 },
-        { id: 'depression_3', text: '보통', value: 3 },
-        { id: 'depression_4', text: '자주', value: 4 },
-        { id: 'depression_5', text: '매우 자주', value: 5 }
-      ]
-    },
-    {
-      id: 'q_004',
-      title: '우울감이 일상생활에 미치는 영향을 구체적으로 설명해 주세요',
-      type: 'text',
-      category: 'psychological',
-      order: 4
-    },
-    {
-      id: 'q_005',
-      title: '현재 복용 중인 약물이 있나요?',
-      type: 'yes_no',
-      category: 'basic_info',
-      order: 5
-    },
-    {
-      id: 'q_006',
-      title: '복용 중인 약물명과 복용 이유를 적어주세요',
-      type: 'text',
-      category: 'basic_info',
-      order: 6
-    },
-    {
-      id: 'q_007',
-      title: '가족 중 정신건강 관련 질환을 앓은 분이 있나요?',
-      type: 'yes_no',
-      category: 'basic_info',
-      order: 7
-    },
-    {
-      id: 'q_008',
-      title: '현재 받고 계신 치료나 상담이 있나요?',
-      type: 'multiple_choice',
-      category: 'basic_info',
-      order: 8,
-      options: [
-        { id: 'treatment_none', text: '없음', value: 'none' },
-        { id: 'treatment_psychiatry', text: '정신과 치료', value: 'psychiatry' },
-        { id: 'treatment_counseling', text: '심리상담', value: 'counseling' },
-        { id: 'treatment_group', text: '집단치료', value: 'group' }
-      ]
-    }
-  ];
+  // 초기 데이터 로딩
+  useEffect(() => {
+    const loadInitialData = async () => {
+      setLoading(true);
+      try {
+        // 설문 테스트 목록 조회
+        const testsData = await surveyService.getAllPsychTests();
+        setPsychTests(testsData);
+        
+        // 첫 번째 테스트 자동 선택
+        if (testsData.length > 0) {
+          setSelectedTestId(testsData[0].id);
+        }
+      } catch (err: any) {
+        console.error('데이터 로딩 실패:', err);
+        setError(err.message || '데이터를 불러올 수 없습니다.');
+      } finally {
+        setLoading(false);
+      }
+    };
 
-  // 분기 로직 규칙 샘플 데이터
-  const [logicRules, setLogicRules] = useState<LogicRule[]>([
-    {
-      id: 'rule_001',
-      name: '우울감 높음 → 상세 질문 표시',
-      description: '우울감 점수가 4점 이상일 때 상세 질문을 표시합니다.',
-      sourceQuestionId: 'q_003',
-      condition: {
-        type: 'greater_than',
-        value: 3
-      },
-      action: {
-        type: 'show_question',
-        targetQuestionId: 'q_004'
-      },
-      priority: 1,
-      isActive: true,
-      createdAt: '2024-08-10T10:00:00',
-      updatedAt: '2024-08-10T10:00:00'
-    },
-    {
-      id: 'rule_002',
-      name: '약물 복용 → 약물 상세 질문',
-      description: '약물을 복용 중이라고 답한 경우 약물 상세 질문을 표시합니다.',
-      sourceQuestionId: 'q_005',
-      condition: {
-        type: 'equals',
-        value: 'yes'
-      },
-      action: {
-        type: 'show_question',
-        targetQuestionId: 'q_006'
-      },
-      priority: 2,
-      isActive: true,
-      createdAt: '2024-08-10T11:00:00',
-      updatedAt: '2024-08-10T11:00:00'
-    },
-    {
-      id: 'rule_003',
-      name: '20대 이하 → 가족력 질문 건너뛰기',
-      description: '20대 이하인 경우 가족력 질문을 건너뜁니다.',
-      sourceQuestionId: 'q_001',
-      condition: {
-        type: 'in_range',
-        value: ['10s', '20s']
-      },
-      action: {
-        type: 'jump_to_question',
-        targetQuestionId: 'q_008'
-      },
-      priority: 3,
-      isActive: true,
-      createdAt: '2024-08-10T12:00:00',
-      updatedAt: '2024-08-11T09:30:00'
-    },
-    {
-      id: 'rule_004',
-      name: '치료 없음 → 추가 안내 메시지',
-      description: '현재 받고 있는 치료가 없는 경우 안내 메시지를 표시합니다.',
-      sourceQuestionId: 'q_008',
-      condition: {
-        type: 'equals',
-        value: 'none'
-      },
-      action: {
-        type: 'show_message',
-        message: '전문가의 도움을 받는 것을 고려해보세요. 언제든 상담 신청이 가능합니다.'
-      },
-      priority: 4,
-      isActive: false,
-      createdAt: '2024-08-10T13:00:00',
-      updatedAt: '2024-08-10T13:00:00'
-    },
-    {
-      id: 'rule_005',
-      name: '남성 + 40대 이상 → 직장 스트레스 질문',
-      description: '남성이면서 40대 이상인 경우 직장 관련 질문을 추가합니다.',
-      sourceQuestionId: 'q_002',
-      condition: {
-        type: 'equals',
-        value: 'male'
-      },
-      action: {
-        type: 'show_question',
-        targetQuestionId: 'q_009'
-      },
-      priority: 5,
-      isActive: false,
-      createdAt: '2024-08-10T14:00:00',
-      updatedAt: '2024-08-10T14:00:00'
+    loadInitialData();
+  }, []);
+
+  // 선택된 테스트의 문항 및 분기 로직 로딩
+  useEffect(() => {
+    if (selectedTestId) {
+      const loadTestData = async () => {
+        try {
+          // 문항 조회
+          const questionsData = await surveyService.getAllPsychQuestions(selectedTestId);
+          setQuestions(questionsData);
+          
+          // 분기 로직 조회
+          const rulesData = await logicService.getAllLogicRules(selectedTestId);
+          setLogicRules(rulesData);
+        } catch (err: any) {
+          console.error('테스트 데이터 로딩 실패:', err);
+          setError(err.message || '테스트 데이터를 불러올 수 없습니다.');
+        }
+      };
+
+      loadTestData();
     }
-  ]);
+  }, [selectedTestId]);
 
   // URL 파라미터에서 문항 ID 가져오기
   useEffect(() => {
     if (router.query.question) {
-      setSelectedQuestionId(router.query.question as string);
+      setSelectedQuestionId(parseInt(router.query.question as string));
     }
   }, [router.query]);
 
-  const getQuestionTitle = (questionId: string) => {
+  const getQuestionTitle = (questionId: number) => {
     const question = questions.find(q => q.id === questionId);
-    return question ? question.title : '알 수 없는 문항';
+    return question ? question.question : '알 수 없는 문항';
   };
 
   const getConditionText = (condition: LogicRule['condition']) => {
@@ -286,18 +128,24 @@ const LogicManagementPage: React.FC = () => {
       setSelectedLogicRule(rule);
       setIsEditing(true);
     } else {
+      if (!selectedTestId) {
+        alert('먼저 설문 테스트를 선택해주세요.');
+        return;
+      }
+      
       setSelectedLogicRule({
-        id: '',
+        id: 0,
+        testId: selectedTestId,
         name: '',
         description: '',
-        sourceQuestionId: selectedQuestionId || questions[0]?.id || '',
+        sourceQuestionId: selectedQuestionId || (questions[0]?.id || 0),
         condition: {
           type: 'equals',
           value: ''
         },
         action: {
           type: 'show_question',
-          targetQuestionId: ''
+          targetQuestionId: undefined
         },
         priority: logicRules.length + 1,
         isActive: true,
@@ -309,40 +157,90 @@ const LogicManagementPage: React.FC = () => {
     setShowRuleModal(true);
   };
 
-  const handleSaveRule = () => {
-    if (!selectedLogicRule) return;
+  const handleSaveRule = async () => {
+    if (!selectedLogicRule || !selectedTestId) return;
 
-    if (isEditing) {
-      setLogicRules(prev => prev.map(rule => 
-        rule.id === selectedLogicRule.id 
-          ? { ...selectedLogicRule, updatedAt: new Date().toISOString() }
-          : rule
-      ));
-    } else {
-      const newRule = {
-        ...selectedLogicRule,
-        id: `rule_${Date.now()}`,
-        createdAt: new Date().toISOString()
-      };
-      setLogicRules(prev => [...prev, newRule]);
+    try {
+      setLoading(true);
+      
+      if (isEditing && selectedLogicRule.id) {
+        // 수정
+        const updateData: UpdateLogicRuleRequest = {
+          name: selectedLogicRule.name,
+          description: selectedLogicRule.description,
+          sourceQuestionId: selectedLogicRule.sourceQuestionId,
+          condition: selectedLogicRule.condition,
+          action: selectedLogicRule.action,
+          priority: selectedLogicRule.priority,
+          isActive: selectedLogicRule.isActive
+        };
+        
+        const updatedRule = await logicService.updateLogicRule(selectedLogicRule.id, updateData);
+        setLogicRules(prev => prev.map(rule => 
+          rule.id === selectedLogicRule.id ? updatedRule : rule
+        ));
+      } else {
+        // 생성
+        const createData: CreateLogicRuleRequest = {
+          testId: selectedTestId,
+          name: selectedLogicRule.name,
+          description: selectedLogicRule.description,
+          sourceQuestionId: selectedLogicRule.sourceQuestionId,
+          condition: selectedLogicRule.condition,
+          action: selectedLogicRule.action,
+          priority: selectedLogicRule.priority,
+          isActive: selectedLogicRule.isActive
+        };
+        
+        const newRule = await logicService.createLogicRule(createData);
+        setLogicRules(prev => [...prev, newRule]);
+      }
+      
+      setShowRuleModal(false);
+      setSelectedLogicRule(null);
+    } catch (err: any) {
+      console.error('분기 로직 저장 실패:', err);
+      setError(err.message || '분기 로직을 저장할 수 없습니다.');
+    } finally {
+      setLoading(false);
     }
-    
-    setShowRuleModal(false);
-    setSelectedLogicRule(null);
   };
 
-  const handleDeleteRule = (ruleId: string) => {
-    if (confirm('이 분기 로직을 삭제하시겠습니까?')) {
+  const handleDeleteRule = async (ruleId: number) => {
+    if (!confirm('이 분기 로직을 삭제하시겠습니까?')) return;
+
+    try {
+      setLoading(true);
+      await logicService.deleteLogicRule(ruleId);
       setLogicRules(prev => prev.filter(rule => rule.id !== ruleId));
+    } catch (err: any) {
+      console.error('분기 로직 삭제 실패:', err);
+      setError(err.message || '분기 로직을 삭제할 수 없습니다.');
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleToggleActive = (ruleId: string) => {
-    setLogicRules(prev => prev.map(rule => 
-      rule.id === ruleId 
-        ? { ...rule, isActive: !rule.isActive, updatedAt: new Date().toISOString() }
-        : rule
-    ));
+  const handleToggleActive = async (ruleId: number) => {
+    try {
+      console.log('=== 상태 토글 요청 ===');
+      console.log('ruleId:', ruleId, 'type:', typeof ruleId);
+      
+      const updatedRule = await logicService.toggleLogicRuleStatus(ruleId);
+      console.log('토글 성공:', updatedRule);
+      console.log('토글 전후 상태:', { 
+        before: logicRules.find(r => r.id === ruleId)?.isActive, 
+        after: updatedRule.isActive 
+      });
+      
+      setLogicRules(prev => prev.map(rule => 
+        rule.id === ruleId ? updatedRule : rule
+      ));
+    } catch (err: any) {
+      console.error('분기 로직 상태 변경 실패:', err);
+      console.error('에러 상세:', err.response?.data);
+      setError(err.message || '분기 로직 상태를 변경할 수 없습니다.');
+    }
   };
 
   return (
@@ -350,8 +248,6 @@ const LogicManagementPage: React.FC = () => {
       {/* 사이드바 */}
       <Sidebar 
         userType="super_admin" 
-        isCollapsed={sidebarCollapsed}
-        onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
       />
 
       {/* 메인 콘텐츠 */}
@@ -402,6 +298,32 @@ const LogicManagementPage: React.FC = () => {
         <main className="flex-1 overflow-y-auto p-6">
           {/* 검색 및 필터 */}
           <div className="mb-6 space-y-4">
+            {/* 설문 테스트 선택 탭 */}
+            <div className="bg-white rounded-custom shadow-soft p-2">
+              <div className="flex space-x-2 overflow-x-auto">
+                {psychTests.map((test) => (
+                  <button
+                    key={test.id}
+                    onClick={() => setSelectedTestId(test.id)}
+                    className={`px-4 py-2 rounded-lg text-caption font-medium transition-colors flex items-center space-x-2 whitespace-nowrap ${
+                      selectedTestId === test.id
+                        ? 'bg-primary text-white'
+                        : 'text-secondary-600 hover:bg-background-100'
+                    }`}
+                  >
+                    <span>{test.title}</span>
+                    <span className={`px-2 py-1 rounded-full text-xs ${
+                      selectedTestId === test.id
+                        ? 'bg-white text-primary'
+                        : 'bg-background-200 text-secondary-500'
+                    }`}>
+                      {logicRules.filter(r => r.testId === test.id).length}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
             {/* 검색바 및 액션 버튼 */}
             <div className="bg-white rounded-custom shadow-soft p-4">
               <div className="flex items-center justify-between">
@@ -417,14 +339,14 @@ const LogicManagementPage: React.FC = () => {
                   </div>
                   <div>
                     <select
-                      value={selectedQuestionId}
-                      onChange={(e) => setSelectedQuestionId(e.target.value)}
+                      value={selectedQuestionId || ''}
+                      onChange={(e) => setSelectedQuestionId(e.target.value ? parseInt(e.target.value) : null)}
                       className="px-4 py-2 border border-background-300 rounded-lg focus:outline-none focus:border-primary-400 focus:ring-2 focus:ring-primary-100"
                     >
                       <option value="">모든 문항</option>
                       {questions.map(question => (
                         <option key={question.id} value={question.id}>
-                          #{question.order}. {question.title.length > 30 ? question.title.substring(0, 30) + '...' : question.title}
+                          #{question.questionOrder}. {question.question.length > 30 ? question.question.substring(0, 30) + '...' : question.question}
                         </option>
                       ))}
                     </select>
@@ -434,13 +356,6 @@ const LogicManagementPage: React.FC = () => {
                   </button>
                 </div>
                 <div className="flex items-center space-x-2 ml-4">
-                  <button
-                    onClick={() => router.push('/admin/cms/questions')}
-                    className="bg-secondary-400 text-white px-4 py-2 rounded-lg hover:bg-secondary-500 transition-colors flex items-center space-x-2"
-                  >
-                    <span>📝</span>
-                    <span>문항 관리</span>
-                  </button>
                   <button
                     onClick={() => openRuleModal()}
                     className="bg-accent text-white px-4 py-2 rounded-lg hover:bg-accent-600 transition-colors flex items-center space-x-2"
@@ -520,7 +435,7 @@ const LogicManagementPage: React.FC = () => {
                       <div className="flex-1">
                         <div className="text-caption text-secondary-600 mb-1">소스 문항</div>
                         <div className="bg-primary-100 text-primary-700 p-3 rounded-lg border-l-4 border-primary">
-                          <div className="text-caption font-medium">#{questions.find(q => q.id === rule.sourceQuestionId)?.order || '?'}</div>
+                          <div className="text-caption font-medium">#{questions.find(q => q.id === rule.sourceQuestionId)?.questionOrder || '?'}</div>
                           <div className="text-body">{getQuestionTitle(rule.sourceQuestionId)}</div>
                         </div>
                       </div>
@@ -654,12 +569,12 @@ const LogicManagementPage: React.FC = () => {
                       </label>
                       <select
                         value={selectedLogicRule.sourceQuestionId}
-                        onChange={(e) => setSelectedLogicRule({...selectedLogicRule, sourceQuestionId: e.target.value})}
+                        onChange={(e) => setSelectedLogicRule({...selectedLogicRule, sourceQuestionId: parseInt(e.target.value)})}
                         className="w-full px-3 py-2 border border-background-300 rounded-lg focus:outline-none focus:border-primary-400"
                       >
                         {questions.map(question => (
                           <option key={question.id} value={question.id}>
-                            #{question.order}. {question.title}
+                            #{question.questionOrder}. {question.question}
                           </option>
                         ))}
                       </select>
@@ -737,14 +652,14 @@ const LogicManagementPage: React.FC = () => {
                           value={selectedLogicRule.action.targetQuestionId || ''}
                           onChange={(e) => setSelectedLogicRule({
                             ...selectedLogicRule,
-                            action: { ...selectedLogicRule.action, targetQuestionId: e.target.value }
+                            action: { ...selectedLogicRule.action, targetQuestionId: e.target.value ? parseInt(e.target.value) : undefined }
                           })}
                           className="w-full px-3 py-2 border border-background-300 rounded-lg focus:outline-none focus:border-primary-400"
                         >
                           <option value="">문항을 선택하세요</option>
                           {questions.map(question => (
                             <option key={question.id} value={question.id}>
-                              #{question.order}. {question.title}
+                              #{question.questionOrder}. {question.question}
                             </option>
                           ))}
                         </select>

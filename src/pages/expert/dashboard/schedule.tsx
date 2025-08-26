@@ -19,7 +19,6 @@ type StatusFilter = 'all' | 'upcoming' | 'in-progress' | 'completed' | 'cancelle
 
 const TodaySchedulePage: React.FC = () => {
   const router = useRouter();
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
 
   // 오늘 일정 샘플 데이터 (확장 버전)
@@ -186,8 +185,6 @@ const TodaySchedulePage: React.FC = () => {
       {/* 사이드바 */}
       <Sidebar 
         userType="expert" 
-        isCollapsed={sidebarCollapsed}
-        onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
       />
 
       {/* 메인 콘텐츠 */}

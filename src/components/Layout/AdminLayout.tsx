@@ -1,6 +1,6 @@
 // 관리자 페이지용 공통 레이아웃 컴포넌트
 
-import React, { useState } from 'react';
+import React from 'react';
 import { useStore } from '@/store/useStore';
 import { getUserType } from '@/utils/permissions';
 import Sidebar from './Sidebar';
@@ -12,22 +12,13 @@ interface AdminLayoutProps {
 
 const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
   const { user } = useStore();
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   
   const userType = getUserType(user);
-
-  const toggleSidebar = () => {
-    setIsSidebarCollapsed(!isSidebarCollapsed);
-  };
 
   return (
     <div className="flex h-screen bg-gray-100">
       {/* 사이드바 */}
-      <Sidebar
-        userType={userType}
-        isCollapsed={isSidebarCollapsed}
-        onToggleCollapse={toggleSidebar}
-      />
+      <Sidebar userType={userType} />
 
       {/* 메인 컨텐츠 영역 */}
       <div className="flex-1 flex flex-col overflow-hidden">

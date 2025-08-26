@@ -31,7 +31,7 @@ interface Manager {
   id: number;
   name: string;
   email: string;
-  user_type: UserType;
+  userType: UserType;
 }
 
 interface ParentCenter {
@@ -117,21 +117,21 @@ const EditCenterPage: React.FC = () => {
         
         // 모든 center_manager 타입 사용자 조회
         const response = await userService.getAllUsers({
-          user_type: 'center_manager' as UserType,
+          userType: 'center_manager' as UserType,
           limit: 100
         });
         
         // 현재 센터의 관리자이거나 아직 센터를 관리하지 않는 사용자만 필터링
         const availableManagers = response.users
           .filter(user => 
-            !user.center_id || 
+            !user.centerId || 
             (originalCenter && user.id === originalCenter.managerId)
           )
           .map(user => ({
             id: user.id,
             name: user.name,
             email: user.email,
-            user_type: user.user_type
+            userType: user.userType
           }));
         
         setManagers(availableManagers);

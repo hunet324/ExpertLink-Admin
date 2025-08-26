@@ -121,12 +121,11 @@ export class AuthService {
       console.log('사용자 프로필 조회 성공:', user);
       console.log('사용자 타입 필드들:', {
         userType: user.userType,
-        user_type: user.user_type,
         allFields: Object.keys(user)
       });
       
-      // user_type 필드가 누락된 경우 경고
-      if (!user.userType && !user.user_type) {
+      // userType 필드가 누락된 경우 경고
+      if (!user.userType) {
         console.warn('⚠️ API 응답에 사용자 타입 정보가 없습니다. 서버 API를 확인하세요.');
       }
       

@@ -1,37 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import Sidebar from '@/components/Layout/Sidebar';
-
-interface Question {
-  id: string;
-  title: string;
-  description?: string;
-  type: 'multiple_choice' | 'single_choice' | 'text' | 'scale' | 'yes_no';
-  required: boolean;
-  category: string;
-  order: number;
-  options?: {
-    id: string;
-    text: string;
-    value: string | number;
-    order: number;
-  }[];
-  validation?: {
-    minLength?: number;
-    maxLength?: number;
-    min?: number;
-    max?: number;
-  };
-  logicRules?: {
-    id: string;
-    condition: string;
-    action: 'show' | 'hide' | 'jump_to';
-    targetId?: string;
-  }[];
-  createdAt: string;
-  updatedAt: string;
-  status: 'active' | 'inactive' | 'draft';
-}
+import { surveyService, PsychTest, PsychQuestion, CreateQuestionRequest, UpdateQuestionRequest } from '@/services/survey';
 
 interface QuestionCategory {
   id: string;
@@ -43,168 +13,67 @@ interface QuestionCategory {
 
 const QuestionsManagementPage: React.FC = () => {
   const router = useRouter();
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [selectedTestId, setSelectedTestId] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedQuestion, setSelectedQuestion] = useState<Question | null>(null);
+  const [selectedQuestion, setSelectedQuestion] = useState<PsychQuestion | null>(null);
   const [showQuestionModal, setShowQuestionModal] = useState(false);
-  const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string>('');
 
-  // 설문 카테고리 샘플 데이터
-  const [categories, setCategories] = useState<QuestionCategory[]>([
-    {
-      id: 'basic_info',
-      name: '기본 정보',
-      description: '내담자의 기본적인 인적사항',
-      order: 1,
-      color: 'primary'
-    },
-    {
-      id: 'psychological',
-      name: '심리 상태',
-      description: '현재 심리적 상태 및 증상',
-      order: 2,
-      color: 'accent'
-    },
-    {
-      id: 'life_style',
-      name: '생활 양식',
-      description: '일상생활 패턴 및 습관',
-      order: 3,
-      color: 'secondary'
-    },
-    {
-      id: 'relationships',
-      name: '대인 관계',
-      description: '가족, 친구, 직장 내 관계',
-      order: 4,
-      color: 'logo'
-    }
-  ]);
+  // 데이터 상태
+  const [psychTests, setPsychTests] = useState<PsychTest[]>([]);
+  const [questions, setQuestions] = useState<PsychQuestion[]>([]);
 
-  // 설문 문항 샘플 데이터
-  const [questions, setQuestions] = useState<Question[]>([
-    {
-      id: 'q_001',
-      title: '현재 나이를 선택해 주세요',
-      type: 'single_choice',
-      required: true,
-      category: 'basic_info',
-      order: 1,
-      options: [
-        { id: 'age_10s', text: '10대', value: '10s', order: 1 },
-        { id: 'age_20s', text: '20대', value: '20s', order: 2 },
-        { id: 'age_30s', text: '30대', value: '30s', order: 3 },
-        { id: 'age_40s', text: '40대', value: '40s', order: 4 },
-        { id: 'age_50plus', text: '50대 이상', value: '50plus', order: 5 }
-      ],
-      createdAt: '2024-08-10T10:00:00',
-      updatedAt: '2024-08-10T10:00:00',
-      status: 'active'
-    },
-    {
-      id: 'q_002',
-      title: '성별을 선택해 주세요',
-      type: 'single_choice',
-      required: true,
-      category: 'basic_info',
-      order: 2,
-      options: [
-        { id: 'gender_male', text: '남성', value: 'male', order: 1 },
-        { id: 'gender_female', text: '여성', value: 'female', order: 2 },
-        { id: 'gender_other', text: '기타', value: 'other', order: 3 }
-      ],
-      createdAt: '2024-08-10T10:00:00',
-      updatedAt: '2024-08-10T10:00:00',
-      status: 'active'
-    },
-    {
-      id: 'q_003',
-      title: '최근 2주간 우울감을 얼마나 자주 경험하셨나요?',
-      description: '해당하는 정도를 선택해 주세요',
-      type: 'scale',
-      required: true,
-      category: 'psychological',
-      order: 1,
-      validation: {
-        min: 1,
-        max: 5
-      },
-      options: [
-        { id: 'depression_1', text: '전혀 없음', value: 1, order: 1 },
-        { id: 'depression_2', text: '거의 없음', value: 2, order: 2 },
-        { id: 'depression_3', text: '보통', value: 3, order: 3 },
-        { id: 'depression_4', text: '자주', value: 4, order: 4 },
-        { id: 'depression_5', text: '매우 자주', value: 5, order: 5 }
-      ],
-      logicRules: [
-        {
-          id: 'rule_001',
-          condition: 'value >= 4',
-          action: 'show',
-          targetId: 'q_004'
+  // 데이터 로딩
+  useEffect(() => {
+    const loadInitialData = async () => {
+      setLoading(true);
+      try {
+        const [testsData, questionsData] = await Promise.all([
+          surveyService.getAllPsychTests(),
+          surveyService.getAllPsychQuestions()
+        ]);
+
+        console.log('받은 문항 데이터:', questionsData);
+        setPsychTests(testsData);
+        setQuestions(questionsData);
+        
+        // 첫 번째 테스트를 기본 선택 (있는 경우)
+        if (testsData.length > 0) {
+          setSelectedTestId(testsData[0].id);
         }
-      ],
-      createdAt: '2024-08-10T11:00:00',
-      updatedAt: '2024-08-11T09:30:00',
-      status: 'active'
-    },
-    {
-      id: 'q_004',
-      title: '우울감이 일상생활에 미치는 영향을 구체적으로 설명해 주세요',
-      type: 'text',
-      required: false,
-      category: 'psychological',
-      order: 2,
-      validation: {
-        minLength: 10,
-        maxLength: 500
-      },
-      createdAt: '2024-08-10T11:00:00',
-      updatedAt: '2024-08-10T11:00:00',
-      status: 'active'
-    },
-    {
-      id: 'q_005',
-      title: '현재 복용 중인 약물이 있나요?',
-      type: 'yes_no',
-      required: true,
-      category: 'basic_info',
-      order: 3,
-      logicRules: [
-        {
-          id: 'rule_002',
-          condition: 'value == "yes"',
-          action: 'show',
-          targetId: 'q_006'
-        }
-      ],
-      createdAt: '2024-08-10T12:00:00',
-      updatedAt: '2024-08-10T12:00:00',
-      status: 'active'
-    },
-    {
-      id: 'q_006',
-      title: '복용 중인 약물명과 복용 이유를 적어주세요',
-      type: 'text',
-      required: true,
-      category: 'basic_info',
-      order: 4,
-      validation: {
-        minLength: 5,
-        maxLength: 200
-      },
-      createdAt: '2024-08-10T12:00:00',
-      updatedAt: '2024-08-10T12:00:00',
-      status: 'draft'
-    }
-  ]);
+      } catch (err: any) {
+        console.error('데이터 로딩 실패:', err);
+        setError(err.message || '데이터를 불러올 수 없습니다.');
+      } finally {
+        setLoading(false);
+      }
+    };
 
-  const getTypeLabel = (type: Question['type']) => {
+    loadInitialData();
+  }, []);
+
+  // 선택된 테스트의 문항만 필터링
+  useEffect(() => {
+    if (selectedTestId) {
+      const loadTestQuestions = async () => {
+        try {
+          const questionsData = await surveyService.getAllPsychQuestions(selectedTestId);
+          setQuestions(questionsData);
+        } catch (err: any) {
+          console.error('문항 로딩 실패:', err);
+          setError(err.message || '문항을 불러올 수 없습니다.');
+        }
+      };
+
+      loadTestQuestions();
+    }
+  }, [selectedTestId]);
+
+  const getTypeLabel = (type: PsychQuestion['questionType']) => {
     const typeLabels = {
       'multiple_choice': '다중 선택',
-      'single_choice': '단일 선택',
       'text': '텍스트',
       'scale': '척도',
       'yes_no': '예/아니오'
@@ -212,10 +81,9 @@ const QuestionsManagementPage: React.FC = () => {
     return typeLabels[type];
   };
 
-  const getTypeColor = (type: Question['type']) => {
+  const getTypeColor = (type: PsychQuestion['questionType']) => {
     const typeColors = {
       'multiple_choice': 'bg-primary-100 text-primary-700',
-      'single_choice': 'bg-accent-100 text-accent-700',
       'text': 'bg-secondary-100 text-secondary-700',
       'scale': 'bg-logo-point/20 text-logo-main',
       'yes_no': 'bg-background-200 text-secondary-600'
@@ -223,111 +91,115 @@ const QuestionsManagementPage: React.FC = () => {
     return typeColors[type];
   };
 
-  const getCategoryColor = (categoryId: string) => {
-    const category = categories.find(cat => cat.id === categoryId);
-    if (!category) return 'bg-background-200 text-secondary-600';
-    
-    const colorMap = {
-      'primary': 'bg-primary-100 text-primary-700 border-primary-200',
-      'accent': 'bg-accent-100 text-accent-700 border-accent-200',
-      'secondary': 'bg-secondary-100 text-secondary-700 border-secondary-200',
-      'logo': 'bg-logo-point/20 text-logo-main border-logo-point/30'
-    };
-    return colorMap[category.color as keyof typeof colorMap] || 'bg-background-200 text-secondary-600';
+  const getTestName = (testId: number) => {
+    const test = psychTests.find(test => test.id === testId);
+    return test?.title || '알 수 없음';
   };
 
-  const getCategoryName = (categoryId: string) => {
-    const category = categories.find(cat => cat.id === categoryId);
-    return category?.name || '기타';
-  };
-
-  const getStatusColor = (status: Question['status']) => {
-    const statusColors = {
-      'active': 'bg-accent text-white',
-      'inactive': 'bg-background-400 text-white',
-      'draft': 'bg-secondary-400 text-white'
-    };
-    return statusColors[status];
-  };
-
-  const getStatusText = (status: Question['status']) => {
-    const statusTexts = {
-      'active': '활성',
-      'inactive': '비활성',
-      'draft': '초안'
-    };
-    return statusTexts[status];
+  const getTestColor = () => {
+    return 'bg-primary-100 text-primary-700 border-primary-200';
   };
 
   const filteredQuestions = questions.filter(question => {
-    const matchesCategory = selectedCategory === 'all' || question.category === selectedCategory;
-    const matchesSearch = question.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         (question.description && question.description.toLowerCase().includes(searchQuery.toLowerCase()));
-    return matchesCategory && matchesSearch;
-  }).sort((a, b) => a.order - b.order);
+    const matchesSearch = question.question.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                         (question.helpText && question.helpText.toLowerCase().includes(searchQuery.toLowerCase()));
+    return matchesSearch;
+  }).sort((a, b) => a.questionOrder - b.questionOrder);
 
-  const getCategoryCount = (categoryId: string) => {
-    if (categoryId === 'all') return questions.length;
-    return questions.filter(q => q.category === categoryId).length;
-  };
-
-  const openQuestionModal = (question?: Question) => {
+  const openQuestionModal = (question?: PsychQuestion) => {
     if (question) {
+      console.log('편집할 문항 데이터:', question);
+      console.log('isRequired:', question.isRequired);
+      console.log('helpText:', question.helpText);
+      console.log('questionOrder:', question.questionOrder);
       setSelectedQuestion(question);
       setIsEditing(true);
     } else {
+      // 설문 테스트가 선택되지 않은 경우 첫 번째 테스트를 기본으로 선택
+      const defaultTestId = selectedTestId || (psychTests.length > 0 ? psychTests[0].id : null);
+      
+      if (!defaultTestId) {
+        alert('사용 가능한 설문 테스트가 없습니다. 먼저 설문 테스트를 생성해주세요.');
+        return;
+      }
+      
+      // 선택된 테스트가 없었다면 기본 테스트로 설정
+      if (!selectedTestId && defaultTestId) {
+        setSelectedTestId(defaultTestId);
+      }
+      
       setSelectedQuestion({
-        id: '',
-        title: '',
-        description: '',
-        type: 'single_choice',
-        required: false,
-        category: categories[0]?.id || '',
-        order: questions.length + 1,
+        id: 0,
+        testId: defaultTestId,
+        question: '',
+        questionOrder: questions.length + 1,
+        questionType: 'multiple_choice',
         options: [],
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        status: 'draft'
+        isRequired: false,
+        helpText: '',
+        createdAt: new Date().toISOString()
       });
       setIsEditing(false);
     }
     setShowQuestionModal(true);
   };
 
-  const handleSaveQuestion = () => {
+  const handleSaveQuestion = async () => {
     if (!selectedQuestion) return;
 
-    if (isEditing) {
-      setQuestions(prev => prev.map(q => 
-        q.id === selectedQuestion.id 
-          ? { ...selectedQuestion, updatedAt: new Date().toISOString() }
-          : q
-      ));
-    } else {
-      const newQuestion = {
-        ...selectedQuestion,
-        id: `q_${Date.now()}`,
-        createdAt: new Date().toISOString()
-      };
-      setQuestions(prev => [...prev, newQuestion]);
+    try {
+      setLoading(true);
+      
+      if (isEditing) {
+        const updatedQuestion = await surveyService.updatePsychQuestion(selectedQuestion.id, {
+          question: selectedQuestion.question,
+          questionType: selectedQuestion.questionType,
+          questionOrder: selectedQuestion.questionOrder,
+          options: selectedQuestion.options,
+          isRequired: selectedQuestion.isRequired,
+          helpText: selectedQuestion.helpText
+        });
+        
+        setQuestions(prev => prev.map(q => 
+          q.id === selectedQuestion.id ? updatedQuestion : q
+        ));
+      } else {
+        const newQuestion = await surveyService.createPsychQuestion({
+          testId: selectedQuestion.testId,
+          question: selectedQuestion.question,
+          questionType: selectedQuestion.questionType,
+          questionOrder: selectedQuestion.questionOrder,
+          options: selectedQuestion.options,
+          isRequired: selectedQuestion.isRequired,
+          helpText: selectedQuestion.helpText
+        });
+        
+        setQuestions(prev => [...prev, newQuestion]);
+      }
+      
+      setShowQuestionModal(false);
+      setSelectedQuestion(null);
+    } catch (err: any) {
+      console.error('문항 저장 실패:', err);
+      setError(err.message || '문항을 저장할 수 없습니다.');
+    } finally {
+      setLoading(false);
     }
-    
-    setShowQuestionModal(false);
-    setSelectedQuestion(null);
   };
 
-  const handleDeleteQuestion = (questionId: string) => {
-    if (confirm('이 문항을 삭제하시겠습니까?')) {
+  const handleDeleteQuestion = async (questionId: number) => {
+    if (!confirm('이 문항을 삭제하시겠습니까?')) return;
+
+    try {
+      setLoading(true);
+      await surveyService.deletePsychQuestion(questionId);
       setQuestions(prev => prev.filter(q => q.id !== questionId));
+    } catch (err: any) {
+      console.error('문항 삭제 실패:', err);
+      setError(err.message || '문항을 삭제할 수 없습니다.');
+    } finally {
+      setLoading(false);
     }
-  };
-
-  const handleStatusChange = (questionId: string, newStatus: Question['status']) => {
-    setQuestions(prev => prev.map(q => 
-      q.id === questionId 
-        ? { ...q, status: newStatus, updatedAt: new Date().toISOString() }
-        : q
-    ));
   };
 
   return (
@@ -335,8 +207,6 @@ const QuestionsManagementPage: React.FC = () => {
       {/* 사이드바 */}
       <Sidebar 
         userType="super_admin" 
-        isCollapsed={sidebarCollapsed}
-        onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
       />
 
       {/* 메인 콘텐츠 */}
@@ -357,18 +227,18 @@ const QuestionsManagementPage: React.FC = () => {
               {/* 통계 정보 */}
               <div className="flex items-center space-x-4 bg-background-100 px-4 py-2 rounded-lg">
                 <div className="text-center">
-                  <div className="text-h4 font-bold text-accent">{questions.filter(q => q.status === 'active').length}</div>
-                  <div className="text-xs text-secondary-400">활성 문항</div>
+                  <div className="text-h4 font-bold text-accent">{questions.length}</div>
+                  <div className="text-xs text-secondary-400">전체 문항</div>
                 </div>
                 <div className="w-px h-8 bg-background-300"></div>
                 <div className="text-center">
-                  <div className="text-h4 font-bold text-secondary-400">{questions.filter(q => q.status === 'draft').length}</div>
-                  <div className="text-xs text-secondary-400">초안</div>
+                  <div className="text-h4 font-bold text-secondary-400">{questions.filter(q => q.isRequired).length}</div>
+                  <div className="text-xs text-secondary-400">필수 문항</div>
                 </div>
                 <div className="w-px h-8 bg-background-300"></div>
                 <div className="text-center">
-                  <div className="text-h4 font-bold text-secondary">{categories.length}</div>
-                  <div className="text-xs text-secondary-400">카테고리</div>
+                  <div className="text-h4 font-bold text-secondary">{psychTests.length}</div>
+                  <div className="text-xs text-secondary-400">설문 테스트</div>
                 </div>
               </div>
 
@@ -404,13 +274,6 @@ const QuestionsManagementPage: React.FC = () => {
                 </div>
                 <div className="flex items-center space-x-2 ml-4">
                   <button
-                    onClick={() => setShowCategoryModal(true)}
-                    className="bg-secondary-400 text-white px-4 py-2 rounded-lg hover:bg-secondary-500 transition-colors flex items-center space-x-2"
-                  >
-                    <span>🏷️</span>
-                    <span>카테고리 관리</span>
-                  </button>
-                  <button
                     onClick={() => openQuestionModal()}
                     className="bg-accent text-white px-4 py-2 rounded-lg hover:bg-accent-600 transition-colors flex items-center space-x-2"
                   >
@@ -421,43 +284,43 @@ const QuestionsManagementPage: React.FC = () => {
               </div>
             </div>
 
-            {/* 카테고리 필터 탭 */}
+            {/* 설문 테스트 선택 탭 */}
             <div className="bg-white rounded-custom shadow-soft p-2">
               <div className="flex space-x-2 overflow-x-auto">
                 <button
-                  onClick={() => setSelectedCategory('all')}
+                  onClick={() => setSelectedTestId(null)}
                   className={`px-4 py-2 rounded-lg text-caption font-medium transition-colors flex items-center space-x-2 whitespace-nowrap ${
-                    selectedCategory === 'all'
+                    selectedTestId === null
                       ? 'bg-primary text-white'
                       : 'text-secondary-600 hover:bg-background-100'
                   }`}
                 >
                   <span>전체</span>
                   <span className={`px-2 py-1 rounded-full text-xs ${
-                    selectedCategory === 'all'
+                    selectedTestId === null
                       ? 'bg-white text-primary'
                       : 'bg-background-200 text-secondary-500'
                   }`}>
-                    {getCategoryCount('all')}
+                    {questions.length}
                   </span>
                 </button>
-                {categories.map((category) => (
+                {psychTests.map((test) => (
                   <button
-                    key={category.id}
-                    onClick={() => setSelectedCategory(category.id)}
+                    key={test.id}
+                    onClick={() => setSelectedTestId(test.id)}
                     className={`px-4 py-2 rounded-lg text-caption font-medium transition-colors flex items-center space-x-2 whitespace-nowrap ${
-                      selectedCategory === category.id
+                      selectedTestId === test.id
                         ? 'bg-primary text-white'
                         : 'text-secondary-600 hover:bg-background-100'
                     }`}
                   >
-                    <span>{category.name}</span>
+                    <span>{test.title}</span>
                     <span className={`px-2 py-1 rounded-full text-xs ${
-                      selectedCategory === category.id
+                      selectedTestId === test.id
                         ? 'bg-white text-primary'
                         : 'bg-background-200 text-secondary-500'
                     }`}>
-                      {getCategoryCount(category.id)}
+                      {questions.filter(q => q.testId === test.id).length}
                     </span>
                   </button>
                 ))}
@@ -465,9 +328,24 @@ const QuestionsManagementPage: React.FC = () => {
             </div>
           </div>
 
+          {/* 에러 메시지 */}
+          {error && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+              <div className="flex items-center">
+                <span className="text-red-500 mr-2">⚠️</span>
+                <p className="text-red-700">{error}</p>
+              </div>
+            </div>
+          )}
+
           {/* 문항 목록 */}
           <div className="space-y-4">
-            {filteredQuestions.length > 0 ? (
+            {loading ? (
+              <div className="bg-white rounded-custom shadow-soft p-12 text-center">
+                <div className="animate-spin h-12 w-12 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-4"></div>
+                <p className="text-gray-600">데이터를 불러오는 중...</p>
+              </div>
+            ) : filteredQuestions.length > 0 ? (
               filteredQuestions.map((question) => (
                 <div key={question.id} className="bg-white rounded-custom shadow-soft p-6">
                   <div className="flex items-start justify-between mb-4">
@@ -475,32 +353,24 @@ const QuestionsManagementPage: React.FC = () => {
                       <div className="flex items-center space-x-3 mb-2">
                         <div className="flex items-center space-x-2">
                           <span className="bg-background-200 text-secondary-600 px-3 py-1 rounded-full text-caption font-mono">
-                            #{question.order}
+                            #{question.questionOrder}
                           </span>
-                          <span className={`px-3 py-1 rounded-full text-caption font-medium border ${getCategoryColor(question.category)}`}>
-                            {getCategoryName(question.category)}
+                          <span className={`px-3 py-1 rounded-full text-caption font-medium border ${getTestColor()}`}>
+                            {getTestName(question.testId)}
                           </span>
-                          <span className={`px-3 py-1 rounded-full text-caption font-medium ${getTypeColor(question.type)}`}>
-                            {getTypeLabel(question.type)}
+                          <span className={`px-3 py-1 rounded-full text-caption font-medium ${getTypeColor(question.questionType)}`}>
+                            {getTypeLabel(question.questionType)}
                           </span>
-                          <span className={`px-3 py-1 rounded-full text-caption font-medium ${getStatusColor(question.status)}`}>
-                            {getStatusText(question.status)}
-                          </span>
-                          {question.required && (
+                          {question.isRequired && (
                             <span className="bg-error-100 text-error-700 px-2 py-1 rounded text-xs font-medium">
                               필수
                             </span>
                           )}
-                          {question.logicRules && question.logicRules.length > 0 && (
-                            <span className="bg-logo-point/20 text-logo-main px-2 py-1 rounded text-xs font-medium">
-                              분기 {question.logicRules.length}개
-                            </span>
-                          )}
                         </div>
                       </div>
-                      <h3 className="text-h4 font-semibold text-secondary mb-2">{question.title}</h3>
-                      {question.description && (
-                        <p className="text-caption text-secondary-500 mb-3">{question.description}</p>
+                      <h3 className="text-h4 font-semibold text-secondary mb-2">{question.question}</h3>
+                      {question.helpText && (
+                        <p className="text-caption text-secondary-500 mb-3">{question.helpText}</p>
                       )}
                       
                       {/* 선택지 미리보기 */}
@@ -509,7 +379,7 @@ const QuestionsManagementPage: React.FC = () => {
                           <div className="text-caption text-secondary-600 mb-2">선택지 ({question.options.length}개)</div>
                           <div className="grid grid-cols-2 gap-2">
                             {question.options.slice(0, 4).map((option, index) => (
-                              <div key={option.id} className="text-caption text-secondary-700 flex items-center">
+                              <div key={index} className="text-caption text-secondary-700 flex items-center">
                                 <span className="w-4 h-4 bg-background-200 rounded-full mr-2 flex-shrink-0"></span>
                                 {option.text}
                               </div>
@@ -523,68 +393,16 @@ const QuestionsManagementPage: React.FC = () => {
                         </div>
                       )}
 
-                      {/* 유효성 검사 규칙 */}
-                      {question.validation && (
-                        <div className="bg-primary-50 p-3 rounded-lg mt-3">
-                          <div className="text-caption text-primary-600 mb-1">유효성 검사</div>
-                          <div className="text-caption text-primary-700">
-                            {question.validation.minLength && `최소 ${question.validation.minLength}자`}
-                            {question.validation.maxLength && ` / 최대 ${question.validation.maxLength}자`}
-                            {question.validation.min && `최솟값 ${question.validation.min}`}
-                            {question.validation.max && ` / 최댓값 ${question.validation.max}`}
-                          </div>
-                        </div>
-                      )}
                     </div>
 
                     <div className="text-caption text-secondary-400 text-right ml-4">
                       <div>생성: {new Date(question.createdAt).toLocaleDateString('ko-KR')}</div>
-                      <div>수정: {new Date(question.updatedAt).toLocaleDateString('ko-KR')}</div>
                     </div>
                   </div>
 
                   {/* 액션 버튼들 */}
-                  <div className="flex items-center justify-between pt-4 border-t border-background-200">
-                    <div className="flex items-center space-x-2">
-                      {question.logicRules && question.logicRules.length > 0 && (
-                        <button
-                          onClick={() => router.push(`/admin/cms/logic?question=${question.id}`)}
-                          className="bg-logo-point/10 text-logo-main px-3 py-2 rounded-lg text-caption font-medium hover:bg-logo-point/20 transition-colors flex items-center space-x-1"
-                        >
-                          <span>🔀</span>
-                          <span>분기 로직</span>
-                        </button>
-                      )}
-                    </div>
-
+                  <div className="flex items-center justify-end pt-4 border-t border-background-200">
                     <div className="flex space-x-2">
-                      {question.status === 'draft' && (
-                        <button
-                          onClick={() => handleStatusChange(question.id, 'active')}
-                          className="bg-accent text-white px-4 py-2 rounded-lg text-caption font-medium hover:bg-accent-600 transition-colors"
-                        >
-                          활성화
-                        </button>
-                      )}
-                      
-                      {question.status === 'active' && (
-                        <button
-                          onClick={() => handleStatusChange(question.id, 'inactive')}
-                          className="bg-secondary-400 text-white px-4 py-2 rounded-lg text-caption font-medium hover:bg-secondary-500 transition-colors"
-                        >
-                          비활성화
-                        </button>
-                      )}
-
-                      {question.status === 'inactive' && (
-                        <button
-                          onClick={() => handleStatusChange(question.id, 'active')}
-                          className="bg-accent text-white px-4 py-2 rounded-lg text-caption font-medium hover:bg-accent-600 transition-colors"
-                        >
-                          활성화
-                        </button>
-                      )}
-
                       <button
                         onClick={() => openQuestionModal(question)}
                         className="bg-primary text-white px-4 py-2 rounded-lg text-caption font-medium hover:bg-primary-600 transition-colors"
@@ -649,8 +467,8 @@ const QuestionsManagementPage: React.FC = () => {
                     </label>
                     <input
                       type="text"
-                      value={selectedQuestion.title}
-                      onChange={(e) => setSelectedQuestion({...selectedQuestion, title: e.target.value})}
+                      value={selectedQuestion.question}
+                      onChange={(e) => setSelectedQuestion({...selectedQuestion, question: e.target.value})}
                       className="w-full px-3 py-2 border border-background-300 rounded-lg focus:outline-none focus:border-primary-400 focus:ring-2 focus:ring-primary-100"
                       placeholder="문항 제목을 입력하세요"
                     />
@@ -660,11 +478,10 @@ const QuestionsManagementPage: React.FC = () => {
                       문항 유형 *
                     </label>
                     <select
-                      value={selectedQuestion.type}
-                      onChange={(e) => setSelectedQuestion({...selectedQuestion, type: e.target.value as Question['type']})}
+                      value={selectedQuestion.questionType}
+                      onChange={(e) => setSelectedQuestion({...selectedQuestion, questionType: e.target.value as PsychQuestion['questionType']})}
                       className="w-full px-3 py-2 border border-background-300 rounded-lg focus:outline-none focus:border-primary-400"
                     >
-                      <option value="single_choice">단일 선택</option>
                       <option value="multiple_choice">다중 선택</option>
                       <option value="text">텍스트</option>
                       <option value="scale">척도</option>
@@ -675,29 +492,30 @@ const QuestionsManagementPage: React.FC = () => {
 
                 <div>
                   <label className="block text-caption font-medium text-secondary-600 mb-2">
-                    문항 설명
+                    도움말 텍스트
                   </label>
                   <textarea
-                    value={selectedQuestion.description}
-                    onChange={(e) => setSelectedQuestion({...selectedQuestion, description: e.target.value})}
+                    value={selectedQuestion.helpText || ''}
+                    onChange={(e) => setSelectedQuestion({...selectedQuestion, helpText: e.target.value})}
                     rows={3}
                     className="w-full px-3 py-2 border border-background-300 rounded-lg focus:outline-none focus:border-primary-400 focus:ring-2 focus:ring-primary-100"
                     placeholder="문항에 대한 추가 설명을 입력하세요"
                   />
                 </div>
 
-                <div className="grid grid-cols-3 gap-6">
+                <div className="grid grid-cols-2 gap-6">
                   <div>
                     <label className="block text-caption font-medium text-secondary-600 mb-2">
-                      카테고리 *
+                      설문 테스트
                     </label>
                     <select
-                      value={selectedQuestion.category}
-                      onChange={(e) => setSelectedQuestion({...selectedQuestion, category: e.target.value})}
+                      value={selectedQuestion.testId}
+                      onChange={(e) => setSelectedQuestion({...selectedQuestion, testId: parseInt(e.target.value)})}
                       className="w-full px-3 py-2 border border-background-300 rounded-lg focus:outline-none focus:border-primary-400"
+                      disabled={isEditing} // 편집 시에는 테스트 변경 불가
                     >
-                      {categories.map(category => (
-                        <option key={category.id} value={category.id}>{category.name}</option>
+                      {psychTests.map(test => (
+                        <option key={test.id} value={test.id}>{test.title}</option>
                       ))}
                     </select>
                   </div>
@@ -708,24 +526,10 @@ const QuestionsManagementPage: React.FC = () => {
                     <input
                       type="number"
                       min="1"
-                      value={selectedQuestion.order}
-                      onChange={(e) => setSelectedQuestion({...selectedQuestion, order: parseInt(e.target.value)})}
+                      value={selectedQuestion.questionOrder}
+                      onChange={(e) => setSelectedQuestion({...selectedQuestion, questionOrder: parseInt(e.target.value)})}
                       className="w-full px-3 py-2 border border-background-300 rounded-lg focus:outline-none focus:border-primary-400"
                     />
-                  </div>
-                  <div>
-                    <label className="block text-caption font-medium text-secondary-600 mb-2">
-                      상태
-                    </label>
-                    <select
-                      value={selectedQuestion.status}
-                      onChange={(e) => setSelectedQuestion({...selectedQuestion, status: e.target.value as Question['status']})}
-                      className="w-full px-3 py-2 border border-background-300 rounded-lg focus:outline-none focus:border-primary-400"
-                    >
-                      <option value="draft">초안</option>
-                      <option value="active">활성</option>
-                      <option value="inactive">비활성</option>
-                    </select>
                   </div>
                 </div>
 
@@ -733,8 +537,8 @@ const QuestionsManagementPage: React.FC = () => {
                   <input
                     type="checkbox"
                     id="required"
-                    checked={selectedQuestion.required}
-                    onChange={(e) => setSelectedQuestion({...selectedQuestion, required: e.target.checked})}
+                    checked={selectedQuestion.isRequired}
+                    onChange={(e) => setSelectedQuestion({...selectedQuestion, isRequired: e.target.checked})}
                     className="mr-2"
                   />
                   <label htmlFor="required" className="text-caption text-secondary-600">

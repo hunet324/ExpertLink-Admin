@@ -24,7 +24,6 @@ interface AssessmentResult {
 }
 
 const AssessmentResultsPage: React.FC = () => {
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [selectedClient, setSelectedClient] = useState('');
   const [selectedAssessment, setSelectedAssessment] = useState('');
   const [viewMode, setViewMode] = useState<'list' | 'detail'>('list');
@@ -197,8 +196,6 @@ const AssessmentResultsPage: React.FC = () => {
       {/* 사이드바 */}
       <Sidebar 
         userType="expert" 
-        isCollapsed={sidebarCollapsed}
-        onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
       />
 
       {/* 메인 콘텐츠 */}

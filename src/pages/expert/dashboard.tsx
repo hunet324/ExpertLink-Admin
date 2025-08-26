@@ -22,7 +22,6 @@ interface NewRequest {
 
 const ExpertDashboard: React.FC = () => {
   const router = useRouter();
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   // 오늘 일정 샘플 데이터
   const todaySchedule: TodaySchedule[] = [
@@ -130,8 +129,6 @@ const ExpertDashboard: React.FC = () => {
       {/* 사이드바 */}
       <Sidebar 
         userType="expert" 
-        isCollapsed={sidebarCollapsed}
-        onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
       />
 
       {/* 메인 콘텐츠 */}

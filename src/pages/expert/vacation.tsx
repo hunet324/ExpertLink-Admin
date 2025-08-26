@@ -25,7 +25,6 @@ interface WeeklySchedule {
 
 const VacationPage: React.FC = () => {
   const router = useRouter();
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [activeTab, setActiveTab] = useState<'calendar' | 'schedule' | 'history'>('calendar');
   const [showNewVacationModal, setShowNewVacationModal] = useState(false);
 
@@ -561,8 +560,6 @@ const VacationPage: React.FC = () => {
       {/* 사이드바 */}
       <Sidebar 
         userType="expert" 
-        isCollapsed={sidebarCollapsed}
-        onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
       />
 
       {/* 메인 콘텐츠 */}

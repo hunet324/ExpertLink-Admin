@@ -15,7 +15,7 @@ const Home: React.FC = () => {
 
         // 인증된 사용자는 사용자 타입에 따라 적절한 대시보드로 리다이렉트
         if (user) {
-            const userType = user.userType || user.user_type;
+            const userType = user.userType || user.userType;
             
             switch (userType) {
                 case 'expert':

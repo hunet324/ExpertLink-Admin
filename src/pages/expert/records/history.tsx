@@ -17,7 +17,6 @@ interface SessionRecord {
 }
 
 const RecordHistoryPage: React.FC = () => {
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedClient, setSelectedClient] = useState('');
   const [selectedType, setSelectedType] = useState<'all' | 'video' | 'chat' | 'voice'>('all');
@@ -145,8 +144,6 @@ const RecordHistoryPage: React.FC = () => {
       {/* 사이드바 */}
       <Sidebar 
         userType="expert" 
-        isCollapsed={sidebarCollapsed}
-        onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
       />
 
       <div className="flex-1 flex overflow-hidden">

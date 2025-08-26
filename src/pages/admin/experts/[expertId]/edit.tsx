@@ -4,6 +4,8 @@ import { withAdminOnly } from '@/components/withPermission';
 import AdminLevelBadge from '@/components/AdminLevelBadge';
 import { userService } from '@/services/user';
 import { centerService } from '@/services/center';
+import { expertService } from '@/services/expert';
+import { adminService } from '@/services/admin';
 import { useStore } from '@/store/useStore';
 import { getUserType } from '@/utils/permissions';
 import Link from 'next/link';
@@ -83,7 +85,7 @@ const ExpertEditPage: React.FC = () => {
         phone: expertData.phone || '',
         status: expertData.status || 'active',
         bio: (expertData as any).bio || '',
-        centerId: (expertData.center_id || (expertData as any).centerId)?.toString() || '',
+        centerId: (expertData.centerId || (expertData as any).centerId)?.toString() || '',
         specialties: (expertData as any).specialties || [],
         yearsExperience: (expertData as any).yearsExperience || 0,
         hourlyRate: (expertData as any).hourlyRate || 0,
@@ -147,30 +149,27 @@ const ExpertEditPage: React.FC = () => {
       setSaving(true);
       setError('');
 
-      const updateData = {
+      // 통합 API로 모든 정보를 한 번에 업데이트
+      const comprehensiveUpdateData = {
+        // 기본 사용자 정보
         name: formData.name,
         phone: formData.phone,
         status: formData.status,
-        bio: formData.bio,
         centerId: formData.centerId ? parseInt(formData.centerId) : undefined,
-        specialties: formData.specialties,
+        
+        // 전문가 프로필 정보
+        licenseNumber: formData.licenseNumber,
+        licenseType: formData.licenseType,
         yearsExperience: formData.yearsExperience,
         hourlyRate: formData.hourlyRate,
-        licenseType: formData.licenseType,
-        licenseNumber: formData.licenseNumber
+        specialization: formData.specialties,
+        introduction: formData.bio
       };
 
-      console.log('🔍 Frontend sending updateData:', JSON.stringify(updateData, null, 2));
-      console.log('🔍 Form data before sending:', {
-        bio: formData.bio,
-        specialties: formData.specialties,
-        yearsExperience: formData.yearsExperience,
-        hourlyRate: formData.hourlyRate,
-        licenseType: formData.licenseType,
-        licenseNumber: formData.licenseNumber
-      });
-
-      await userService.updateUser(parseInt(expertId), updateData);
+      console.log('🔍 통합 API 업데이트 데이터:', JSON.stringify(comprehensiveUpdateData, null, 2));
+      
+      await adminService.updateExpertProfile(parseInt(expertId), comprehensiveUpdateData);
+      console.log('✅ 통합 API로 전문가 정보 업데이트 성공');
       
       alert('전문가 정보가 성공적으로 수정되었습니다.');
       router.push(`/admin/experts/${expertId}/profile`);

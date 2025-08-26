@@ -33,7 +33,6 @@ interface UserActivityLog {
 
 const UserActivityLogsPage: React.FC = () => {
   const router = useRouter();
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [userTypeFilter, setUserTypeFilter] = useState<'all' | UserActivityLog['userType']>('all');
   const [activityTypeFilter, setActivityTypeFilter] = useState<'all' | UserActivityLog['activityType']>('all');
@@ -415,8 +414,6 @@ const UserActivityLogsPage: React.FC = () => {
       {/* 사이드바 */}
       <Sidebar 
         userType="super_admin" 
-        isCollapsed={sidebarCollapsed}
-        onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
       />
 
       {/* 메인 콘텐츠 */}

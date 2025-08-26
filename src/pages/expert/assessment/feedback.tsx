@@ -28,7 +28,6 @@ interface FeedbackTemplate {
 
 const AssessmentFeedbackPage: React.FC = () => {
   const router = useRouter();
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [selectedAssessment, setSelectedAssessment] = useState<string | null>(null);
   const [feedbackContent, setFeedbackContent] = useState('');
   const [selectedTemplate, setSelectedTemplate] = useState<string>('');
@@ -254,8 +253,6 @@ const AssessmentFeedbackPage: React.FC = () => {
       {/* 사이드바 */}
       <Sidebar 
         userType="expert" 
-        isCollapsed={sidebarCollapsed}
-        onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
       />
 
       {/* 메인 콘텐츠 */}

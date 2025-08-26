@@ -1,6 +1,7 @@
 import type { AppProps } from 'next/app';
 import { useEffect } from 'react';
 import { useStore } from '@/store/useStore';
+import { SidebarProvider } from '@/contexts/SidebarContext';
 import '@/styles/globals.css';
 
 export default function App({ Component, pageProps }: AppProps) {
@@ -22,5 +23,9 @@ export default function App({ Component, pageProps }: AppProps) {
     initializeAuth();
   }, [isAuthenticated, getCurrentUser]);
 
-  return <Component {...pageProps} />;
+  return (
+    <SidebarProvider>
+      <Component {...pageProps} />
+    </SidebarProvider>
+  );
 }

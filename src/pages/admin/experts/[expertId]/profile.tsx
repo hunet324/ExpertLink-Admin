@@ -60,9 +60,9 @@ const ExpertProfilePage: React.FC = () => {
       
       // 센터 정보 조회
       let centerName = '';
-      if (expertData.center_id) {
+      if (expertData.centerId) {
         try {
-          const centerInfo = await centerService.getCenterById(expertData.center_id);
+          const centerInfo = await centerService.getCenterById(expertData.centerId);
           centerName = centerInfo.name;
         } catch (err) {
           console.error('센터 정보 조회 실패:', err);

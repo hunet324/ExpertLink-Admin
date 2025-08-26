@@ -56,8 +56,8 @@ const AdminAccountsPage: React.FC = () => {
             id: 1,
             name: '김관리',
             email: 'admin1@expertlink.com',
-            user_type: 'regional_manager',
-            center_id: 1,
+            userType: 'regional_manager',
+            centerId: 1,
             center_name: '강남센터',
             lastLogin: '2024-08-19T09:30:00Z',
             loginCount: 245,
@@ -71,8 +71,8 @@ const AdminAccountsPage: React.FC = () => {
             id: 2,
             name: '박센터',
             email: 'center1@expertlink.com',
-            user_type: 'center_manager',
-            center_id: 2,
+            userType: 'center_manager',
+            centerId: 2,
             center_name: '부산센터',
             lastLogin: '2024-08-18T16:45:00Z',
             loginCount: 156,
@@ -86,8 +86,8 @@ const AdminAccountsPage: React.FC = () => {
             id: 3,
             name: '이직원',
             email: 'staff1@expertlink.com',
-            user_type: 'staff',
-            center_id: 1,
+            userType: 'staff',
+            centerId: 1,
             center_name: '강남센터',
             lastLogin: '2024-08-19T08:15:00Z',
             loginCount: 89,
@@ -101,8 +101,8 @@ const AdminAccountsPage: React.FC = () => {
             id: 4,
             name: '최신규',
             email: 'new@expertlink.com',
-            user_type: 'staff',
-            center_id: 3,
+            userType: 'staff',
+            centerId: 3,
             center_name: '대구센터',
             lastLogin: undefined,
             loginCount: 0,
@@ -440,13 +440,13 @@ const AdminAccountsPage: React.FC = () => {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                          getPermissionLevelColor(account.user_type as any)
+                          getPermissionLevelColor(account.userType as any)
                         }`}>
-                          {getAdminLevelText(account.user_type as any)}
+                          {getAdminLevelText(account.userType as any)}
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {account.center_name || `센터 ${account.center_id || '?'}`}
+                        {account.center_name || `센터 ${account.centerId || '?'}`}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
@@ -564,7 +564,7 @@ const AdminAccountsPage: React.FC = () => {
               <div className="ml-4">
                 <p className="text-sm font-medium text-gray-500">수퍼관리자</p>
                 <p className="text-2xl font-semibold text-gray-900">
-                  {adminAccounts.filter(a => a.user_type === 'super_admin').length}
+                  {adminAccounts.filter(a => a.userType === 'super_admin').length}
                 </p>
               </div>
             </div>

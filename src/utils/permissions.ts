@@ -7,7 +7,7 @@ import { UserType, AdminLevel, PermissionLevel, Permission, PermissionContext, U
  */
 export function getUserType(user: User | null | undefined): UserType | null {
   if (!user) return null;
-  return user.userType || user.user_type || null;
+  return user.userType || user.userType || null;
 }
 
 /**

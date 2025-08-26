@@ -98,7 +98,7 @@ export function withPermission<P extends object>(
             return; // useEffect가 다시 실행됨
           }
 
-          const userType = user.user_type || user.userType;
+          const userType = user.userType || user.userType;
           if (!userType) {
             console.error('사용자 타입 정보가 없습니다.');
             setHasPermission(false);

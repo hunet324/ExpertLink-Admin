@@ -1,278 +1,186 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import Sidebar from '@/components/Layout/Sidebar';
+import { paymentService, PaymentRecord, PaymentStats, PaymentFilters } from '@/services/payments';
 
-interface PaymentRecord {
-  id: string;
-  transactionId: string;
-  userId: string;
-  userName: string;
-  userEmail: string;
-  expertId: string;
-  expertName: string;
-  serviceType: 'video' | 'chat' | 'voice' | 'test';
-  serviceName: string;
-  amount: number;
-  fee: number;
-  netAmount: number;
-  paymentMethod: 'card' | 'bank' | 'kakao' | 'paypal';
-  paymentProvider: string;
-  status: 'completed' | 'pending' | 'failed' | 'refunded' | 'cancelled';
-  paidAt: string;
-  refundedAt?: string;
-  refundReason?: string;
-  sessionDuration?: number;
-  notes?: string;
-  receiptUrl?: string;
-}
 
 const PaymentHistoryPage: React.FC = () => {
   const router = useRouter();
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | PaymentRecord['status']>('all');
-  const [serviceFilter, setServiceFilter] = useState<'all' | PaymentRecord['serviceType']>('all');
-  const [paymentMethodFilter, setPaymentMethodFilter] = useState<'all' | PaymentRecord['paymentMethod']>('all');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [serviceFilter, setServiceFilter] = useState<string>('all');
+  const [paymentMethodFilter, setPaymentMethodFilter] = useState<string>('all');
   const [dateRange, setDateRange] = useState({
     start: '2024-08-01',
-    end: '2024-08-12'
+    end: '2024-08-31'
   });
   const [selectedPayment, setSelectedPayment] = useState<PaymentRecord | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string>('');
+  const [paymentRecords, setPaymentRecords] = useState<PaymentRecord[]>([]);
+  const [paymentStats, setPaymentStats] = useState<PaymentStats | null>(null);
+  const [pagination, setPagination] = useState({
+    page: 1,
+    limit: 20,
+    total: 0,
+    totalPages: 0
+  });
 
-  // 결제 내역 샘플 데이터
-  const [paymentRecords, setPaymentRecords] = useState<PaymentRecord[]>([
-    {
-      id: 'pay_001',
-      transactionId: 'TXN_20240812_001',
-      userId: 'user_001',
-      userName: '김내담자',
-      userEmail: 'kim.client@example.com',
-      expertId: 'expert_001',
-      expertName: '이상담사',
-      serviceType: 'video',
-      serviceName: '화상 상담 (50분)',
-      amount: 80000,
-      fee: 8000,
-      netAmount: 72000,
-      paymentMethod: 'card',
-      paymentProvider: '국민카드',
-      status: 'completed',
-      paidAt: '2024-08-12T14:30:00',
-      sessionDuration: 50,
-      receiptUrl: '/receipts/pay_001.pdf'
-    },
-    {
-      id: 'pay_002',
-      transactionId: 'TXN_20240812_002',
-      userId: 'user_002',
-      userName: '박환자',
-      userEmail: 'park.patient@example.com',
-      expertId: 'expert_002',
-      expertName: '최심리사',
-      serviceType: 'test',
-      serviceName: 'MMPI-2 성격검사',
-      amount: 35000,
-      fee: 5250,
-      netAmount: 29750,
-      paymentMethod: 'kakao',
-      paymentProvider: '카카오페이',
-      status: 'completed',
-      paidAt: '2024-08-12T11:20:00',
-      receiptUrl: '/receipts/pay_002.pdf'
-    },
-    {
-      id: 'pay_003',
-      transactionId: 'TXN_20240812_003',
-      userId: 'user_003',
-      userName: '정고객',
-      userEmail: 'jung.customer@example.com',
-      expertId: 'expert_001',
-      expertName: '이상담사',
-      serviceType: 'chat',
-      serviceName: '채팅 상담 (1시간)',
-      amount: 50000,
-      fee: 5000,
-      netAmount: 45000,
-      paymentMethod: 'bank',
-      paymentProvider: '우리은행',
-      status: 'completed',
-      paidAt: '2024-08-11T16:45:00',
-      sessionDuration: 60
-    },
-    {
-      id: 'pay_004',
-      transactionId: 'TXN_20240811_001',
-      userId: 'user_004',
-      userName: '홍길동',
-      userEmail: 'hong.gd@example.com',
-      expertId: 'expert_003',
-      expertName: '김전문가',
-      serviceType: 'voice',
-      serviceName: '음성 상담 (40분)',
-      amount: 60000,
-      fee: 6000,
-      netAmount: 54000,
-      paymentMethod: 'card',
-      paymentProvider: '신한카드',
-      status: 'refunded',
-      paidAt: '2024-08-11T10:15:00',
-      refundedAt: '2024-08-11T18:30:00',
-      refundReason: '전문가 사정으로 상담 취소',
-      sessionDuration: 0
-    },
-    {
-      id: 'pay_005',
-      transactionId: 'TXN_20240810_001',
-      userId: 'user_005',
-      userName: '이서비스',
-      userEmail: 'lee.service@example.com',
-      expertId: 'expert_002',
-      expertName: '최심리사',
-      serviceType: 'video',
-      serviceName: '화상 상담 (50분)',
-      amount: 80000,
-      fee: 8000,
-      netAmount: 72000,
-      paymentMethod: 'paypal',
-      paymentProvider: 'PayPal',
-      status: 'failed',
-      paidAt: '2024-08-10T13:00:00',
-      notes: '카드 한도 초과'
-    },
-    {
-      id: 'pay_006',
-      transactionId: 'TXN_20240809_001',
-      userId: 'user_006',
-      userName: '박테스트',
-      userEmail: 'park.test@example.com',
-      expertId: 'expert_004',
-      expertName: '정검사자',
-      serviceType: 'test',
-      serviceName: 'K-WAIS-IV 지능검사',
-      amount: 45000,
-      fee: 6750,
-      netAmount: 38250,
-      paymentMethod: 'card',
-      paymentProvider: '하나카드',
-      status: 'pending',
-      paidAt: '2024-08-09T09:30:00'
+  // 결제 내역 및 통계 로딩
+  useEffect(() => {
+    loadPayments();
+    loadStats();
+  }, [statusFilter, serviceFilter, paymentMethodFilter, dateRange, pagination.page]);
+
+  const loadPayments = async () => {
+    setLoading(true);
+    try {
+      const filters: PaymentFilters = {
+        status: statusFilter,
+        serviceType: serviceFilter,
+        paymentMethod: paymentMethodFilter,
+        startDate: dateRange.start,
+        endDate: dateRange.end,
+        search: searchQuery,
+        page: pagination.page,
+        limit: pagination.limit
+      };
+
+      const response = await paymentService.getAllPayments(filters);
+      console.log('결제 내역 API 응답:', response);
+      if (response.data.length > 0) {
+        console.log('첫 번째 결제 데이터:', response.data[0]);
+        console.log('paidAt 값:', response.data[0].paidAt, typeof response.data[0].paidAt);
+      }
+      setPaymentRecords(response.data);
+      setPagination(response.pagination);
+      setError('');
+    } catch (err: any) {
+      console.error('결제 내역 조회 실패:', err);
+      setError(err.message || '결제 내역을 불러올 수 없습니다.');
+    } finally {
+      setLoading(false);
     }
+  };
+
+  const loadStats = async () => {
+    try {
+      console.log('결제 통계 API 호출:', { dateRange });
+      const stats = await paymentService.getPaymentStats(dateRange.start, dateRange.end);
+      console.log('결제 통계 API 응답:', stats);
+      setPaymentStats(stats);
+    } catch (err: any) {
+      console.error('결제 통계 조회 실패:', err);
+    }
+  };
+
+  const handleSearch = () => {
+    setPagination(prev => ({ ...prev, page: 1 }));
+    loadPayments();
+  };
+
+  // 샘플 데이터 (API 연동 후 제거됨)
+  const [samplePayments] = useState<PaymentRecord[]>([
   ]);
 
-  const getStatusColor = (status: PaymentRecord['status']) => {
-    const statusColors = {
+  const getStatusColor = (status: string) => {
+    const statusColors: Record<string, string> = {
       'completed': 'bg-accent text-white',
       'pending': 'bg-secondary-400 text-white',
       'failed': 'bg-error text-white',
       'refunded': 'bg-background-400 text-white',
       'cancelled': 'bg-background-300 text-secondary-600'
     };
-    return statusColors[status];
+    return statusColors[status] || 'bg-gray-100 text-gray-800';
   };
 
-  const getStatusText = (status: PaymentRecord['status']) => {
-    const statusTexts = {
+  const getStatusText = (status: string) => {
+    const statusTexts: Record<string, string> = {
       'completed': '완료',
       'pending': '대기중',
       'failed': '실패',
       'refunded': '환불',
       'cancelled': '취소'
     };
-    return statusTexts[status];
+    return statusTexts[status] || '알 수 없음';
   };
 
-  const getServiceTypeLabel = (type: PaymentRecord['serviceType']) => {
-    const typeLabels = {
+  const getServiceTypeLabel = (type: string) => {
+    const typeLabels: Record<string, string> = {
       'video': '화상 상담',
       'chat': '채팅 상담',
       'voice': '음성 상담',
       'test': '심리검사'
     };
-    return typeLabels[type];
+    return typeLabels[type] || '기타';
   };
 
-  const getServiceTypeColor = (type: PaymentRecord['serviceType']) => {
-    const typeColors = {
+  const getServiceTypeColor = (type: string) => {
+    const typeColors: Record<string, string> = {
       'video': 'bg-primary-100 text-primary-700',
       'chat': 'bg-accent-100 text-accent-700',
       'voice': 'bg-secondary-100 text-secondary-700',
       'test': 'bg-logo-point/20 text-logo-main'
     };
-    return typeColors[type];
+    return typeColors[type] || 'bg-gray-100 text-gray-700';
   };
 
-  const getPaymentMethodLabel = (method: PaymentRecord['paymentMethod']) => {
-    const methodLabels = {
+  const getPaymentMethodLabel = (method: string) => {
+    const methodLabels: Record<string, string> = {
       'card': '신용카드',
       'bank': '계좌이체',
       'kakao': '카카오페이',
       'paypal': 'PayPal'
     };
-    return methodLabels[method];
+    return methodLabels[method] || '기타';
   };
 
-  const filteredPayments = paymentRecords.filter(payment => {
-    const matchesSearch = payment.userName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         payment.expertName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         payment.transactionId.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         payment.serviceName.toLowerCase().includes(searchQuery.toLowerCase());
-    
-    const matchesStatus = statusFilter === 'all' || payment.status === statusFilter;
-    const matchesService = serviceFilter === 'all' || payment.serviceType === serviceFilter;
-    const matchesPaymentMethod = paymentMethodFilter === 'all' || payment.paymentMethod === paymentMethodFilter;
-    
-    const paymentDate = new Date(payment.paidAt).toISOString().split('T')[0];
-    const matchesDateRange = paymentDate >= dateRange.start && paymentDate <= dateRange.end;
-    
-    return matchesSearch && matchesStatus && matchesService && matchesPaymentMethod && matchesDateRange;
-  });
+  // API에서 이미 필터링되어 오므로 그대로 사용
+  const filteredPayments = paymentRecords;
 
-  const getFilterCount = (status: 'all' | PaymentRecord['status']) => {
-    if (status === 'all') return paymentRecords.length;
-    return paymentRecords.filter(payment => payment.status === status).length;
+  const getFilterCount = (status: string) => {
+    if (!paymentStats || !paymentStats.statusCounts) return 0;
+    if (status === 'all') return Object.values(paymentStats.statusCounts).reduce((sum, count) => sum + count, 0);
+    return (paymentStats.statusCounts as any)[status] || 0;
   };
 
-  const getTotalStats = () => {
-    const completedPayments = filteredPayments.filter(p => p.status === 'completed');
-    const totalAmount = completedPayments.reduce((sum, p) => sum + p.amount, 0);
-    const totalFee = completedPayments.reduce((sum, p) => sum + p.fee, 0);
-    const totalNet = completedPayments.reduce((sum, p) => sum + p.netAmount, 0);
-    
-    return {
-      totalTransactions: completedPayments.length,
-      totalAmount,
-      totalFee,
-      totalNet,
-      refundedAmount: filteredPayments.filter(p => p.status === 'refunded').reduce((sum, p) => sum + p.amount, 0)
-    };
+  const stats = paymentStats || {
+    totalTransactions: 0,
+    totalAmount: 0,
+    totalFee: 0,
+    totalNet: 0,
+    refundedAmount: 0
   };
-
-  const stats = getTotalStats();
 
   const openDetailModal = (payment: PaymentRecord) => {
     setSelectedPayment(payment);
     setShowDetailModal(true);
   };
 
-  const handleRefund = (paymentId: string) => {
+  const handleRefund = async (paymentId: number) => {
     const reason = prompt('환불 사유를 입력하세요:');
     if (reason) {
-      setPaymentRecords(prev => prev.map(payment => 
-        payment.id === paymentId 
-          ? { 
-              ...payment, 
-              status: 'refunded' as const, 
-              refundedAt: new Date().toISOString(),
-              refundReason: reason
-            }
-          : payment
-      ));
+      try {
+        setLoading(true);
+        await paymentService.refundPayment(paymentId, reason);
+        alert('환불 처리가 완료되었습니다.');
+        loadPayments(); // 목록 새로고침
+        loadStats(); // 통계 새로고침
+      } catch (err: any) {
+        console.error('환불 처리 실패:', err);
+        alert(err.message || '환불 처리에 실패했습니다.');
+      } finally {
+        setLoading(false);
+      }
     }
   };
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleString('ko-KR');
+  const formatDate = (dateString: string | null | undefined) => {
+    if (!dateString) return '-';
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) return 'Invalid Date';
+    return date.toLocaleString('ko-KR');
   };
 
   const formatCurrency = (amount: number) => {
@@ -282,11 +190,7 @@ const PaymentHistoryPage: React.FC = () => {
   return (
     <div className="flex h-screen bg-background-50">
       {/* 사이드바 */}
-      <Sidebar 
-        userType="super_admin" 
-        isCollapsed={sidebarCollapsed}
-        onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
-      />
+      <Sidebar userType="super_admin" />
 
       {/* 메인 콘텐츠 */}
       <div className="flex-1 flex flex-col overflow-hidden">
@@ -379,6 +283,16 @@ const PaymentHistoryPage: React.FC = () => {
           </div>
         </div>
 
+        {/* 에러 메시지 */}
+        {error && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4 mx-6 mb-6">
+            <div className="flex items-center">
+              <span className="text-red-500 mr-2">⚠️</span>
+              <p className="text-red-700">{error}</p>
+            </div>
+          </div>
+        )}
+
         {/* 메인 콘텐츠 영역 */}
         <main className="flex-1 overflow-y-auto p-6 pt-0">
           {/* 검색 및 필터 */}
@@ -409,7 +323,10 @@ const PaymentHistoryPage: React.FC = () => {
                     onChange={(e) => setDateRange({...dateRange, end: e.target.value})}
                     className="px-3 py-2 border border-background-300 rounded-lg focus:outline-none focus:border-primary-400"
                   />
-                  <button className="bg-primary text-white px-6 py-2 rounded-lg hover:bg-primary-600 transition-colors">
+                  <button 
+                    onClick={handleSearch}
+                    className="bg-primary text-white px-6 py-2 rounded-lg hover:bg-primary-600 transition-colors"
+                  >
                     검색
                   </button>
                 </div>
@@ -546,7 +463,8 @@ const PaymentHistoryPage: React.FC = () => {
                           {payment.status === 'completed' && (
                             <button
                               onClick={() => handleRefund(payment.id)}
-                              className="text-error hover:text-error-600 text-caption"
+                              disabled={loading}
+                              className="text-error hover:text-error-600 text-caption disabled:opacity-50"
                             >
                               환불
                             </button>
@@ -559,7 +477,14 @@ const PaymentHistoryPage: React.FC = () => {
               </table>
             </div>
 
-            {filteredPayments.length === 0 && (
+            {loading && (
+              <div className="p-12 text-center">
+                <div className="animate-spin h-12 w-12 border-4 border-primary border-t-transparent rounded-full mx-auto mb-4"></div>
+                <p className="text-secondary-600">결제 내역을 불러오는 중...</p>
+              </div>
+            )}
+
+            {!loading && filteredPayments.length === 0 && (
               <div className="p-12 text-center">
                 <span className="text-6xl mb-4 block">💳</span>
                 <h3 className="text-h4 font-semibold text-secondary-600 mb-2">
@@ -571,6 +496,60 @@ const PaymentHistoryPage: React.FC = () => {
               </div>
             )}
           </div>
+
+          {/* 페이지네이션 */}
+          {!loading && pagination.totalPages > 1 && (
+            <div className="bg-white rounded-custom shadow-soft p-4 mt-6 flex items-center justify-between">
+              <div className="text-caption text-secondary-600">
+                전체 {pagination.total}건 중 {((pagination.page - 1) * pagination.limit) + 1}-{Math.min(pagination.page * pagination.limit, pagination.total)}건 표시
+              </div>
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={() => setPagination(prev => ({ ...prev, page: Math.max(1, prev.page - 1) }))}
+                  disabled={pagination.page <= 1 || loading}
+                  className="px-3 py-2 border border-background-300 rounded-lg text-caption disabled:opacity-50 disabled:cursor-not-allowed hover:bg-background-50"
+                >
+                  이전
+                </button>
+                
+                {Array.from({ length: Math.min(5, pagination.totalPages) }, (_, i) => {
+                  let pageNum;
+                  if (pagination.totalPages <= 5) {
+                    pageNum = i + 1;
+                  } else if (pagination.page <= 3) {
+                    pageNum = i + 1;
+                  } else if (pagination.page >= pagination.totalPages - 2) {
+                    pageNum = pagination.totalPages - 4 + i;
+                  } else {
+                    pageNum = pagination.page - 2 + i;
+                  }
+                  
+                  return (
+                    <button
+                      key={pageNum}
+                      onClick={() => setPagination(prev => ({ ...prev, page: pageNum }))}
+                      disabled={loading}
+                      className={`px-3 py-2 rounded-lg text-caption ${
+                        pagination.page === pageNum
+                          ? 'bg-primary text-white'
+                          : 'border border-background-300 hover:bg-background-50 disabled:opacity-50'
+                      }`}
+                    >
+                      {pageNum}
+                    </button>
+                  );
+                })}
+                
+                <button
+                  onClick={() => setPagination(prev => ({ ...prev, page: Math.min(prev.totalPages, prev.page + 1) }))}
+                  disabled={pagination.page >= pagination.totalPages || loading}
+                  className="px-3 py-2 border border-background-300 rounded-lg text-caption disabled:opacity-50 disabled:cursor-not-allowed hover:bg-background-50"
+                >
+                  다음
+                </button>
+              </div>
+            </div>
+          )}
         </main>
       </div>
 

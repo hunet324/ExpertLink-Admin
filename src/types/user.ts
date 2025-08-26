@@ -14,7 +14,7 @@ export enum PermissionLevel {
   REGIONAL_MANAGER = 4,
   SUPER_ADMIN = 5,
 }
-export type UserStatus = 'active' | 'inactive' | 'pending' | 'suspended';
+export type UserStatus = 'active' | 'inactive' | 'pending' | 'withdrawn';
 
 export interface User {
   id: number;

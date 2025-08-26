@@ -288,8 +288,8 @@ export const useStore = create<AppState>()(
           // 사용자 액션
           setUser: (user: User) => {
             const userType = getUserType(user);
-            const centerId = user.center_id || user.centerId;
-            const supervisorId = user.supervisor_id || user.supervisorId;
+            const centerId = user.centerId || user.centerId;
+            const supervisorId = user.supervisorId || user.supervisorId;
             
             // 권한 정보 자동 생성
             const permissions = userType ? generateUserPermissions(userType, centerId, supervisorId) : null;
@@ -382,8 +382,8 @@ export const useStore = create<AppState>()(
             const user = state.user;
             if (user) {
               const userType = getUserType(user);
-              const centerId = user.center_id || user.centerId;
-              const supervisorId = user.supervisor_id || user.supervisorId;
+              const centerId = user.centerId || user.centerId;
+              const supervisorId = user.supervisorId || user.supervisorId;
               
               if (userType) {
                 const permissions = generateUserPermissions(userType, centerId, supervisorId);

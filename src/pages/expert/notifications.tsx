@@ -20,7 +20,6 @@ type NotificationFilter = 'all' | 'unread' | 'new_request' | 'schedule_reminder'
 
 const NotificationsPage: React.FC = () => {
   const router = useRouter();
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [filter, setFilter] = useState<NotificationFilter>('all');
   const [selectedNotifications, setSelectedNotifications] = useState<string[]>([]);
 
@@ -264,8 +263,6 @@ const NotificationsPage: React.FC = () => {
       {/* 사이드바 */}
       <Sidebar 
         userType="expert" 
-        isCollapsed={sidebarCollapsed}
-        onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
       />
 
       {/* 메인 콘텐츠 */}

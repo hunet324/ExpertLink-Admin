@@ -34,9 +34,9 @@ interface ExpertInfo {
   name: string;
   email: string;
   phone?: string;
-  center_id?: number;
+  centerId?: number;
   centerName?: string;
-  user_type: string;
+  userType: string;
   status: string;
 }
 
@@ -73,9 +73,9 @@ const ExpertVacationPage: React.FC = () => {
       
       // 센터 정보가 있으면 센터 이름도 조회
       let centerName = '';
-      if (expertData.center_id) {
+      if (expertData.centerId) {
         try {
-          const centerInfo = await centerService.getCenterById(expertData.center_id);
+          const centerInfo = await centerService.getCenterById(expertData.centerId);
           centerName = centerInfo.name;
         } catch (err) {
           console.error('센터 정보 조회 실패:', err);

@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useStore } from '@/store/useStore';
+import { useSidebar } from '@/contexts/SidebarContext';
 import { UserType } from '@/types/user';
 import { canAccessMenu, hasMinPermissionLevel, isAdmin } from '@/utils/permissions';
 import PermissionGuard from '@/components/PermissionGuard';
@@ -24,14 +25,57 @@ interface MenuItem {
 
 interface SidebarProps {
   userType: UserType | null;
-  isCollapsed?: boolean;
-  onToggleCollapse?: () => void;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ userType, isCollapsed = false, onToggleCollapse }) => {
+const Sidebar: React.FC<SidebarProps> = ({ userType }) => {
+  const { isCollapsed, toggleSidebar, toggleMenu, openSingleMenu, expandedMenus, isMenuExpanded, setExpandedMenus, isHydrated } = useSidebar();
   const router = useRouter();
   const { logout, isLoading, pendingExpertsCount } = useStore();
-  const [expandedMenus, setExpandedMenus] = useState<string[]>(['dashboard']);
+
+  // 현재 경로를 기반으로 메뉴 자동 확장 (hydration 완료 후, 페이지 이동 시에만)
+  useEffect(() => {
+    // hydration이 완료되지 않았거나 userType이 없으면 아무것도 하지 않음
+    if (!isHydrated || !userType) return;
+    
+    const currentPath = router.pathname;
+    console.log('페이지 이동 감지:', currentPath);
+    
+    // 관리자 메뉴와 전문가 메뉴에 대한 기본 정의 (간단화)
+    const basicMenuPaths: { [key: string]: string[] } = {
+      '/admin/centers': ['centers'],
+      '/admin/experts': ['experts'],
+      '/admin/cms': ['cms'],
+      '/admin/statistics': ['statistics'],
+      '/admin/system': ['system'],
+      '/admin/super-admin': ['super-admin'],
+      '/expert/dashboard': ['dashboard'],
+      '/expert/clients': ['clients'],
+      '/expert/counseling': ['counseling'],
+      '/expert/assessment': ['assessment']
+    };
+    
+    // 현재 경로에 맞는 부모 메뉴 찾기
+    let parentMenuIds: string[] = [];
+    for (const [path, menuIds] of Object.entries(basicMenuPaths)) {
+      if (currentPath.startsWith(path)) {
+        parentMenuIds = menuIds;
+        break;
+      }
+    }
+    
+    // 페이지 이동 시에만 메뉴 상태 변경
+    if (parentMenuIds.length > 0) {
+      const targetMenuId = parentMenuIds[0];
+      console.log(`페이지 이동으로 인한 메뉴 ${targetMenuId} 자동 확장`);
+      
+      // 약간의 지연을 두어 사용자의 수동 조작과 구분
+      const timeoutId = setTimeout(() => {
+        openSingleMenu(targetMenuId);
+      }, 100);
+      
+      return () => clearTimeout(timeoutId);
+    }
+  }, [router.pathname, userType, isHydrated]);
 
   // userType이 null인 경우 기본값 처리
   if (!userType) {
@@ -48,7 +92,7 @@ const Sidebar: React.FC<SidebarProps> = ({ userType, isCollapsed = false, onTogg
               </div>
             )}
             <button
-              onClick={onToggleCollapse}
+              onClick={toggleSidebar}
               className="p-2 rounded-lg hover:bg-secondary-600 transition-colors"
             >
               <span className="text-lg">{isCollapsed ? '→' : '←'}</span>
@@ -168,19 +212,10 @@ const Sidebar: React.FC<SidebarProps> = ({ userType, isCollapsed = false, onTogg
       minLevel: 'center_manager', // 🎯 통일
       children: [
         { id: 'expert-list', label: '전문가 목록', icon: '📋', path: '/admin/experts/list', minLevel: 'center_manager' },
+        { id: 'expert-approval', label: '전문가 승인', icon: '✅', path: '/admin/approval/experts', badge: pendingExpertsCount > 0 ? pendingExpertsCount : undefined, minLevel: 'staff' },
         { id: 'vacation-management', label: '휴가 관리', icon: '🏖️', path: '/admin/experts/vacation', minLevel: 'center_manager' },
         { id: 'schedule-management', label: '스케줄 관리', icon: '📅', path: '/admin/experts/schedule', minLevel: 'center_manager' },
         { id: 'working-hours', label: '근무시간 모니터링', icon: '⏰', path: '/admin/experts/working-hours', minLevel: 'center_manager' }
-      ]
-    },
-    {
-      id: 'approval',
-      label: '승인 관리',
-      icon: '✅',
-      path: '/admin/approval',
-      minLevel: 'staff', // 🎯 통일: adminOnly → minLevel
-      children: [
-        { id: 'expert-approval', label: '전문가 승인', icon: '👨‍⚕️', path: '/admin/approval/experts', badge: pendingExpertsCount > 0 ? pendingExpertsCount : undefined, minLevel: 'staff' }
       ]
     },
     {
@@ -202,8 +237,7 @@ const Sidebar: React.FC<SidebarProps> = ({ userType, isCollapsed = false, onTogg
       minLevel: 'staff', // 🎯 통일: adminOnly → minLevel
       children: [
         { id: 'payment-history', label: '결제 내역', icon: '💳', path: '/admin/statistics/payments', minLevel: 'center_manager' }, // 🎯 통일
-        { id: 'revenue-stats', label: '매출 통계', icon: '💰', path: '/admin/statistics/revenue', minLevel: 'center_manager' }, // 🎯 통일
-        { id: 'regional-stats', label: '지역별 통계', icon: '🗺️', path: '/admin/statistics/regional', minLevel: 'regional_manager' }
+        { id: 'revenue-stats', label: '매출 통계', icon: '💰', path: '/admin/statistics/revenue', minLevel: 'center_manager' } // 🎯 통일
       ]
     },
     {
@@ -241,6 +275,7 @@ const Sidebar: React.FC<SidebarProps> = ({ userType, isCollapsed = false, onTogg
       ]
     }
   ];
+
 
   // 권한에 따른 메뉴 필터링 (통일된 권한 체계 사용)
   const filterMenusByPermission = (menus: MenuItem[], userType: UserType): MenuItem[] => {
@@ -340,13 +375,7 @@ const Sidebar: React.FC<SidebarProps> = ({ userType, isCollapsed = false, onTogg
     }
   }
 
-  const toggleMenu = (menuId: string) => {
-    setExpandedMenus(prev => 
-      prev.includes(menuId) 
-        ? prev.filter(id => id !== menuId)
-        : [...prev, menuId]
-    );
-  };
+  // toggleMenu는 이제 컨텍스트에서 가져옴
 
   const handleMenuClick = async (menu: MenuItem) => {
     if (menu.children) {
@@ -354,7 +383,8 @@ const Sidebar: React.FC<SidebarProps> = ({ userType, isCollapsed = false, onTogg
       if (menu.id === 'dashboard') {
         await router.push(menu.path);
       }
-      // 토글은 페이지 이동 후 처리
+      
+      // 사용자가 직접 클릭할 때는 단순 토글 (다른 메뉴 닫지 않음)
       toggleMenu(menu.id);
     }
   };
@@ -363,7 +393,7 @@ const Sidebar: React.FC<SidebarProps> = ({ userType, isCollapsed = false, onTogg
     return router.pathname === path || router.pathname.startsWith(path + '/');
   };
 
-  const isMenuExpanded = (menuId: string) => expandedMenus.includes(menuId);
+  // isMenuExpanded는 이제 컨텍스트에서 가져옴
 
   const handleLogout = async () => {
     if (isLoading) return; // 중복 클릭 방지
@@ -400,7 +430,7 @@ const Sidebar: React.FC<SidebarProps> = ({ userType, isCollapsed = false, onTogg
             </div>
           )}
           <button
-            onClick={onToggleCollapse}
+            onClick={toggleSidebar}
             className="p-2 rounded-lg hover:bg-secondary-600 transition-colors"
             aria-label="사이드바 토글"
           >
@@ -432,7 +462,7 @@ const Sidebar: React.FC<SidebarProps> = ({ userType, isCollapsed = false, onTogg
                     </div>
                     {!isCollapsed && menu.children && (
                       <span className={`text-xs transition-transform duration-smooth ${
-                        isMenuExpanded(menu.id) ? 'rotate-90' : ''
+                        isHydrated && isMenuExpanded(menu.id) ? 'rotate-90' : ''
                       }`}>
                         ▶
                       </span>
@@ -466,8 +496,8 @@ const Sidebar: React.FC<SidebarProps> = ({ userType, isCollapsed = false, onTogg
                 )}
               </div>
 
-              {/* 서브 메뉴 */}
-              {menu.children && isMenuExpanded(menu.id) && !isCollapsed && (
+              {/* 서브 메뉴 (hydration 완료 후에만 렌더링) */}
+              {menu.children && isHydrated && isMenuExpanded(menu.id) && !isCollapsed && (
                 <ul className="ml-6 mt-2 space-y-1 border-l border-secondary-600 pl-4">
                   {menu.children.map((subMenu) => (
                     <li key={subMenu.id}>
