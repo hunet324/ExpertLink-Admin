@@ -8,155 +8,86 @@ import AdminLevelBadge from '@/components/AdminLevelBadge';
 import PermissionGuard from '@/components/PermissionGuard';
 import Sidebar from '@/components/Layout/Sidebar';
 import { hasMinPermissionLevel, getUserType } from '@/utils/permissions';
+import { AdminApiService } from '@/services/adminApi';
+import { AdminDashboardStats, RecentActivity, PendingApproval } from '@/types/admin';
 
-interface SystemStats {
-  totalUsers: number;
-  totalExperts: number;
-  totalSessions: number;
-  totalRevenue: number;
-  pendingApprovals: number;
-  activeUsers: number;
-}
-
-interface RecentActivity {
-  id: string;
-  type: 'user_registration' | 'expert_application' | 'session_completed' | 'payment' | 'system_alert';
-  description: string;
-  timestamp: string;
-  status: 'info' | 'success' | 'warning' | 'error';
-}
-
-interface PendingApproval {
-  id: string;
-  type: 'user' | 'expert';
-  name: string;
-  email: string;
-  submittedAt: string;
-  priority: 'high' | 'medium' | 'low';
-}
+// 기존 인터페이스들을 types/admin.ts에서 import하므로 삭제
 
 const AdminDashboard: React.FC = () => {
   const router = useRouter();
   const { user, isLoading } = useStore();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
+  
+  // API 데이터 상태
+  const [dashboardStats, setDashboardStats] = useState<AdminDashboardStats | null>(null);
+  const [recentActivities, setRecentActivities] = useState<RecentActivity[]>([]);
+  const [pendingApprovals, setPendingApprovals] = useState<PendingApproval[]>([]);
 
   const userType = getUserType(user);
 
-  // 권한별 시스템 통계 데이터 생성
-  const getSystemStats = (): SystemStats => {
-    // 수퍼관리자는 전체 데이터
-    if (userType === 'super_admin') {
-      return {
-        totalUsers: 2847,
-        totalExperts: 156,
-        totalSessions: 8429,
-        totalRevenue: 125680000,
-        pendingApprovals: 23,
-        activeUsers: 892
-      };
+  // 실제 API 데이터 로딩 함수
+  const loadDashboardData = async () => {
+    try {
+      setLoading(true);
+      setError('');
+      
+      console.log('🔄 대시보드 데이터 로딩 시작...');
+      
+      try {
+        // 병렬로 모든 데이터 요청
+        console.log('🔄 API 호출 시작...');
+        const [statsData, activitiesData, approvalsData] = await Promise.all([
+          AdminApiService.getDashboardStats(),
+          AdminApiService.getRecentActivities(5),
+          AdminApiService.getPendingApprovals()
+        ]);
+        console.log('✅ 모든 API 호출 완료:', { statsData, activitiesData, approvalsData });
+        
+        setDashboardStats(statsData);
+        setRecentActivities(activitiesData);
+        setPendingApprovals(approvalsData);
+        console.log('✅ 대시보드 데이터 로딩 성공');
+        
+      } catch (apiError: any) {
+        console.warn('⚠️ API 호출 실패, 임시 데이터 사용:', apiError.message);
+        
+        // API 실패 시 임시 샘플 데이터 사용 (개발 중)
+        const sampleStats = {
+          users: { totalUsers: 2847, activeUsers: 892, pendingUsers: 23, inactiveUsers: 156, newUsersToday: 12, newUsersThisWeek: 87, newUsersThisMonth: 245 },
+          experts: { totalExperts: 156, verifiedExperts: 89, pendingVerification: 15, activeExperts: 78, averageRating: 4.5 },
+          counselings: { totalCounselings: 8429, completedCounselings: 3429, pendingCounselings: 234, cancelledCounselings: 89, counselingsToday: 45, counselingsThisWeek: 287, counselingsThisMonth: 1245, averageSessionDuration: 60 },
+          contents: { totalContents: 125, publishedContents: 89, draftContents: 36, totalViews: 15420, totalLikes: 2340, mostViewedContent: null },
+          psychTests: { totalTests: 25, activeTests: 18, totalResponses: 1245, responsesToday: 45, responsesThisWeek: 287, responsesThisMonth: 892, mostPopularTest: null },
+          system: { totalNotifications: 156, unreadNotifications: 23, chatMessagesToday: 234, loginSessionsToday: 89, serverUptime: '72 hours', databaseSize: '2.4 GB' },
+          generatedAt: new Date().toISOString()
+        };
+        
+        const sampleActivities = [
+          { id: '1', type: 'expert_application' as const, description: '김상담사님이 전문가 등록을 신청했습니다.', timestamp: new Date(Date.now() - 30 * 60 * 1000).toISOString(), status: 'info' as const },
+          { id: '2', type: 'session_completed' as const, description: '오늘 총 45건의 상담이 완료되었습니다.', timestamp: new Date(Date.now() - 60 * 60 * 1000).toISOString(), status: 'success' as const },
+          { id: '3', type: 'system_alert' as const, description: '서버 CPU 사용률이 85%를 초과했습니다.', timestamp: new Date(Date.now() - 90 * 60 * 1000).toISOString(), status: 'warning' as const }
+        ];
+        
+        const sampleApprovals = [
+          { id: '1', type: 'expert' as const, name: '박심리사', email: 'park.counselor@example.com', submittedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(), priority: 'high' as const, status: 'pending' as const },
+          { id: '2', type: 'expert' as const, name: '이상담사', email: 'lee.therapist@example.com', submittedAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(), priority: 'medium' as const, status: 'pending' as const }
+        ];
+        
+        setDashboardStats(sampleStats);
+        setRecentActivities(sampleActivities);
+        setPendingApprovals(sampleApprovals);
+        
+        setError(`API 연결 실패: ${apiError.message} (임시 데이터 표시 중)`);
+      }
+      
+    } catch (err: any) {
+      console.error('❌ 대시보드 데이터 로딩 실패:', err);
+      setError(err.message || '데이터를 불러올 수 없습니다.');
+    } finally {
+      setLoading(false);
     }
-    // 지역관리자는 지역 데이터
-    if (userType === 'regional_manager') {
-      return {
-        totalUsers: 1247,
-        totalExperts: 89,
-        totalSessions: 3429,
-        totalRevenue: 45680000,
-        pendingApprovals: 15,
-        activeUsers: 342
-      };
-    }
-    // 센터관리자는 센터 데이터
-    if (userType === 'center_manager') {
-      return {
-        totalUsers: 456,
-        totalExperts: 18,
-        totalSessions: 1245,
-        totalRevenue: 15680000,
-        pendingApprovals: 8,
-        activeUsers: 123
-      };
-    }
-    // 일반 직원은 제한된 데이터
-    return {
-      totalUsers: 0,
-      totalExperts: 18,
-      totalSessions: 1245,
-      totalRevenue: 0,
-      pendingApprovals: 8,
-      activeUsers: 0
-    };
   };
-
-  const systemStats = getSystemStats();
-
-  // 최근 활동 샘플 데이터
-  const recentActivities: RecentActivity[] = [
-    {
-      id: '1',
-      type: 'expert_application',
-      description: '김상담사님이 전문가 등록을 신청했습니다.',
-      timestamp: '2024-08-11T10:30:00',
-      status: 'info'
-    },
-    {
-      id: '2',
-      type: 'session_completed',
-      description: '오늘 총 45건의 상담이 완료되었습니다.',
-      timestamp: '2024-08-11T09:15:00',
-      status: 'success'
-    },
-    {
-      id: '3',
-      type: 'system_alert',
-      description: '서버 CPU 사용률이 85%를 초과했습니다.',
-      timestamp: '2024-08-11T08:45:00',
-      status: 'warning'
-    },
-    {
-      id: '4',
-      type: 'payment',
-      description: '7월 전문가 정산이 완료되었습니다.',
-      timestamp: '2024-08-11T08:00:00',
-      status: 'success'
-    },
-    {
-      id: '5',
-      type: 'user_registration',
-      description: '이번 주 신규 사용자 등록 50% 증가',
-      timestamp: '2024-08-10T18:30:00',
-      status: 'info'
-    }
-  ];
-
-  // 승인 대기 목록 샘플 데이터
-  const pendingApprovals: PendingApproval[] = [
-    {
-      id: '1',
-      type: 'expert',
-      name: '박심리사',
-      email: 'park.counselor@example.com',
-      submittedAt: '2024-08-10T14:20:00',
-      priority: 'high'
-    },
-    {
-      id: '2',
-      type: 'expert',
-      name: '이상담사',
-      email: 'lee.therapist@example.com',
-      submittedAt: '2024-08-10T11:45:00',
-      priority: 'medium'
-    },
-    {
-      id: '3',
-      type: 'user',
-      name: '최내담자',
-      email: 'client.choi@example.com',
-      submittedAt: '2024-08-10T09:30:00',
-      priority: 'low'
-    }
-  ];
 
   const getActivityIcon = (type: string) => {
     switch (type) {
@@ -208,23 +139,20 @@ const AdminDashboard: React.FC = () => {
 
   // 데이터 로딩
   useEffect(() => {
-    const loadDashboardData = async () => {
-      try {
-        setLoading(true);
-        // 실제로는 API 호출하여 사용자별 권한에 맞는 데이터 로드
-        await new Promise(resolve => setTimeout(resolve, 500)); // 시뮬레이션
-        setError('');
-      } catch (err: any) {
-        console.error('대시보드 데이터 로딩 실패:', err);
-        setError(err.message || '데이터를 불러올 수 없습니다.');
-      } finally {
-        setLoading(false);
-      }
-    };
-
     if (userType) {
       loadDashboardData();
     }
+  }, [userType]);
+  
+  // 5분마다 자동 새로고침
+  useEffect(() => {
+    if (!userType) return;
+    
+    const interval = setInterval(() => {
+      loadDashboardData();
+    }, 5 * 60 * 1000); // 5분
+    
+    return () => clearInterval(interval);
   }, [userType]);
 
   if (isLoading || loading) {
@@ -266,6 +194,7 @@ const AdminDashboard: React.FC = () => {
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-2xl font-bold text-gray-900 mb-2">
+                관리자 대시보드
               </h1>
               <div className="flex items-center gap-2">
                 <p className="text-gray-600">
@@ -289,10 +218,20 @@ const AdminDashboard: React.FC = () => {
                 </Link>
               </PermissionGuard>
               
-              {/* 시스템 상태 */}
-              <div className="flex items-center space-x-2 bg-green-50 px-3 py-2 rounded-lg">
-                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                <span className="text-sm text-green-700">시스템 정상</span>
+              {/* 시스템 상태 및 새로고침 */}
+              <div className="flex items-center space-x-2">
+                <div className="flex items-center space-x-2 bg-green-50 px-3 py-2 rounded-lg">
+                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                  <span className="text-sm text-green-700">시스템 정상</span>
+                </div>
+                <button
+                  onClick={loadDashboardData}
+                  disabled={loading}
+                  className="bg-blue-500 hover:bg-blue-600 disabled:bg-gray-400 text-white px-3 py-2 rounded-lg transition-colors flex items-center gap-2 text-sm"
+                >
+                  <span className={loading ? 'animate-spin' : ''}>{loading ? '🔄' : '🔄'}</span>
+                  {loading ? '로딩 중...' : '새로고침'}
+                </button>
               </div>
 
               {/* 사용자 정보 */}
@@ -314,9 +253,20 @@ const AdminDashboard: React.FC = () => {
         {/* 에러 메시지 */}
         {error && (
           <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
-            <div className="flex items-center">
-              <span className="text-red-500 mr-2">⚠️</span>
-              <p className="text-red-700">{error}</p>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center">
+                <span className="text-red-500 mr-2">⚠️</span>
+                <p className="text-red-700">{error}</p>
+              </div>
+              <button
+                onClick={() => {
+                  setError('');
+                  loadDashboardData();
+                }}
+                className="text-red-600 hover:text-red-800 text-sm font-medium"
+              >
+                다시 시도
+              </button>
             </div>
           </div>
         )}
@@ -325,101 +275,115 @@ const AdminDashboard: React.FC = () => {
         <div className="space-y-6">
           {/* 권한별 주요 지표 카드 */}
           <div className="grid grid-cols-2 lg:grid-cols-6 gap-4">
-            {/* 총 사용자 - 센터관리자 이상만 표시 */}
-            <PermissionGuard minLevel="center_manager">
-              <div className="bg-white rounded-lg shadow-sm p-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-gray-500">
-                      {userType === 'super_admin' ? '전체 사용자' :
-                       userType === 'regional_manager' ? '지역 사용자' :
-                       '센터 사용자'}
-                    </p>
-                    <p className="text-2xl font-bold text-gray-900 mt-1">{systemStats.totalUsers.toLocaleString()}</p>
+            {dashboardStats && (
+              <>
+                {/* 총 사용자 - 센터관리자 이상만 표시 */}
+                <PermissionGuard minLevel="center_manager">
+                  <div className="bg-white rounded-lg shadow-sm p-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-gray-500">
+                          {userType === 'super_admin' ? '전체 사용자' :
+                           userType === 'regional_manager' ? '지역 사용자' :
+                           '센터 사용자'}
+                        </p>
+                        <p className="text-2xl font-bold text-gray-900 mt-1">{dashboardStats.users.totalUsers.toLocaleString()}</p>
+                        <p className="text-xs text-gray-400 mt-1">활성: {dashboardStats.users.activeUsers.toLocaleString()}</p>
+                      </div>
+                      <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                        <span className="text-xl">👥</span>
+                      </div>
+                    </div>
                   </div>
-                  <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                    <span className="text-xl">👥</span>
-                  </div>
-                </div>
-              </div>
-            </PermissionGuard>
+                </PermissionGuard>
 
-            {/* 전문가 수 - 모든 관리자가 볼 수 있음 */}
-            <div className="bg-white rounded-lg shadow-sm p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-500">
-                    {userType === 'super_admin' ? '전체 전문가' :
-                     userType === 'regional_manager' ? '지역 전문가' :
-                     '센터 전문가'}
-                  </p>
-                  <p className="text-2xl font-bold text-gray-900 mt-1">{systemStats.totalExperts}</p>
-                </div>
-                <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
-                  <span className="text-xl">👨‍⚕️</span>
-                </div>
-              </div>
-            </div>
-
-            {/* 총 상담 - 모든 관리자가 볼 수 있음 */}
-            <div className="bg-white rounded-lg shadow-sm p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-500">총 상담</p>
-                  <p className="text-2xl font-bold text-gray-900 mt-1">{systemStats.totalSessions.toLocaleString()}</p>
-                </div>
-                <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
-                  <span className="text-xl">💬</span>
-                </div>
-              </div>
-            </div>
-
-            {/* 총 매출 - 센터관리자 이상만 표시 */}
-            <PermissionGuard minLevel="center_manager">
-              <div className="bg-white rounded-lg shadow-sm p-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-gray-500">총 매출</p>
-                    <p className="text-2xl font-bold text-gray-900 mt-1">
-                      {systemStats.totalRevenue > 0 ? formatCurrency(systemStats.totalRevenue) : '-'}
-                    </p>
-                  </div>
-                  <div className="w-10 h-10 bg-yellow-100 rounded-lg flex items-center justify-center">
-                    <span className="text-xl">💰</span>
+                {/* 전문가 수 - 모든 관리자가 볼 수 있음 */}
+                <div className="bg-white rounded-lg shadow-sm p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-gray-500">
+                        {userType === 'super_admin' ? '전체 전문가' :
+                         userType === 'regional_manager' ? '지역 전문가' :
+                         '센터 전문가'}
+                      </p>
+                      <p className="text-2xl font-bold text-gray-900 mt-1">{dashboardStats.experts.totalExperts.toLocaleString()}</p>
+                      <p className="text-xs text-gray-400 mt-1">인증: {dashboardStats.experts.verifiedExperts}</p>
+                    </div>
+                    <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
+                      <span className="text-xl">👨‍⚕️</span>
+                    </div>
                   </div>
                 </div>
-              </div>
-            </PermissionGuard>
 
-            {/* 승인 대기 - 모든 관리자가 볼 수 있음 */}
-            <div className="bg-white rounded-lg shadow-sm p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-500">승인 대기</p>
-                  <p className="text-2xl font-bold text-red-600 mt-1">{systemStats.pendingApprovals}</p>
-                </div>
-                <div className="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center">
-                  <span className="text-xl">⏳</span>
-                </div>
-              </div>
-            </div>
-
-            {/* 활성 사용자 - 센터관리자 이상만 표시 */}
-            <PermissionGuard minLevel="center_manager">
-              <div className="bg-white rounded-lg shadow-sm p-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-gray-500">활성 사용자</p>
-                    <p className="text-2xl font-bold text-green-600 mt-1">
-                      {systemStats.activeUsers > 0 ? systemStats.activeUsers : '-'}
-                    </p>
-                  </div>
-                  <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
-                    <span className="text-xl">🟢</span>
+                {/* 총 상담 - 모든 관리자가 볼 수 있음 */}
+                <div className="bg-white rounded-lg shadow-sm p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-gray-500">총 상담</p>
+                      <p className="text-2xl font-bold text-gray-900 mt-1">{dashboardStats.counselings.totalCounselings.toLocaleString()}</p>
+                      <p className="text-xs text-gray-400 mt-1">완료: {dashboardStats.counselings.completedCounselings}</p>
+                    </div>
+                    <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
+                      <span className="text-xl">💬</span>
+                    </div>
                   </div>
                 </div>
+
+                {/* 심리 검사 - 센터관리자 이상만 표시 */}
+                <PermissionGuard minLevel="center_manager">
+                  <div className="bg-white rounded-lg shadow-sm p-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-gray-500">심리 검사</p>
+                        <p className="text-2xl font-bold text-gray-900 mt-1">{dashboardStats.psychTests.totalResponses.toLocaleString()}</p>
+                        <p className="text-xs text-gray-400 mt-1">오늘: {dashboardStats.psychTests.responsesToday}</p>
+                      </div>
+                      <div className="w-10 h-10 bg-yellow-100 rounded-lg flex items-center justify-center">
+                        <span className="text-xl">📊</span>
+                      </div>
+                    </div>
+                  </div>
+                </PermissionGuard>
+
+                {/* 승인 대기 - 모든 관리자가 볼 수 있음 */}
+                <div className="bg-white rounded-lg shadow-sm p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-gray-500">승인 대기</p>
+                      <p className="text-2xl font-bold text-red-600 mt-1">{dashboardStats.experts.pendingVerification}</p>
+                      <p className="text-xs text-gray-400 mt-1">전문가 대기</p>
+                    </div>
+                    <div className="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center">
+                      <span className="text-xl">⏳</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 시스템 알림 - 센터관리자 이상만 표시 */}
+                <PermissionGuard minLevel="center_manager">
+                  <div className="bg-white rounded-lg shadow-sm p-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-gray-500">시스템 알림</p>
+                        <p className="text-2xl font-bold text-blue-600 mt-1">{dashboardStats.system.unreadNotifications}</p>
+                        <p className="text-xs text-gray-400 mt-1">읽지 않음</p>
+                      </div>
+                      <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                        <span className="text-xl">🔔</span>
+                      </div>
+                    </div>
+                  </div>
+                </PermissionGuard>
+              </>
+            )}
+            
+            {/* 로딩 상태 */}
+            {!dashboardStats && loading && (
+              <div className="col-span-full flex justify-center items-center py-8">
+                <div className="animate-spin h-8 w-8 border-2 border-blue-500 border-t-transparent rounded-full"></div>
+                <span className="ml-2 text-gray-600">통계 로딩 중...</span>
               </div>
-            </PermissionGuard>
+            )}
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -432,7 +396,12 @@ const AdminDashboard: React.FC = () => {
                 </h2>
               </div>
               <div className="p-6">
-                {recentActivities.length > 0 ? (
+                {loading ? (
+                  <div className="text-center py-8">
+                    <div className="animate-spin h-6 w-6 border-2 border-blue-500 border-t-transparent rounded-full mx-auto mb-2"></div>
+                    <p className="text-gray-500 text-sm">최근 활동 로딩 중...</p>
+                  </div>
+                ) : recentActivities.length > 0 ? (
                   <div className="space-y-3">
                     {recentActivities.map((activity) => (
                       <div key={activity.id} className={`p-3 border-l-4 rounded-lg ${getActivityColor(activity.status)}`}>
@@ -440,7 +409,14 @@ const AdminDashboard: React.FC = () => {
                           <span className="text-lg flex-shrink-0">{getActivityIcon(activity.type)}</span>
                           <div className="flex-1">
                             <p className="text-sm text-gray-700">{activity.description}</p>
-                            <p className="text-xs text-gray-500 mt-1">{formatTime(activity.timestamp)}</p>
+                            <div className="flex items-center justify-between mt-1">
+                              <p className="text-xs text-gray-500">{formatTime(activity.timestamp)}</p>
+                              {activity.userName && (
+                                <span className="text-xs bg-gray-100 px-2 py-1 rounded text-gray-600">
+                                  {activity.userName}
+                                </span>
+                              )}
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -471,7 +447,7 @@ const AdminDashboard: React.FC = () => {
                     <span className="mr-2">✅</span>
                     승인 대기 목록
                   </div>
-                  {pendingApprovals.length > 0 && (
+                  {!loading && pendingApprovals.length > 0 && (
                     <span className="bg-red-500 text-white text-xs px-2 py-1 rounded-full">
                       {pendingApprovals.length}
                     </span>
@@ -479,10 +455,15 @@ const AdminDashboard: React.FC = () => {
                 </h2>
               </div>
               <div className="p-6">
-                {pendingApprovals.length > 0 ? (
+                {loading ? (
+                  <div className="text-center py-8">
+                    <div className="animate-spin h-6 w-6 border-2 border-blue-500 border-t-transparent rounded-full mx-auto mb-2"></div>
+                    <p className="text-gray-500 text-sm">승인 대기 목록 로딩 중...</p>
+                  </div>
+                ) : pendingApprovals.length > 0 ? (
                   <div className="space-y-3">
                     {pendingApprovals.map((approval) => (
-                      <div key={approval.id} className="p-3 border border-gray-200 rounded-lg">
+                      <div key={approval.id} className="p-3 border border-gray-200 rounded-lg hover:border-gray-300 transition-colors">
                         <div className="flex items-start justify-between mb-2">
                           <div className="flex items-center space-x-2">
                             <span className="text-lg">
@@ -494,7 +475,7 @@ const AdminDashboard: React.FC = () => {
                             </div>
                           </div>
                           <span className={`px-2 py-1 rounded-full text-xs font-medium border ${getPriorityColor(approval.priority)}`}>
-                            {approval.priority}
+                            {approval.priority.toUpperCase()}
                           </span>
                         </div>
                         <div className="flex items-center justify-between">
@@ -502,12 +483,12 @@ const AdminDashboard: React.FC = () => {
                             {formatTime(approval.submittedAt)}
                           </span>
                           <div className="flex space-x-2">
-                            <button className="bg-blue-500 text-white px-3 py-1 rounded text-xs font-medium hover:bg-blue-600 transition-colors">
-                              승인
-                            </button>
-                            <button className="bg-red-500 text-white px-3 py-1 rounded text-xs font-medium hover:bg-red-600 transition-colors">
-                              거절
-                            </button>
+                            <Link
+                              href={`/admin/approval/experts?id=${approval.id}`}
+                              className="bg-blue-500 text-white px-3 py-1 rounded text-xs font-medium hover:bg-blue-600 transition-colors"
+                            >
+                              검토
+                            </Link>
                           </div>
                         </div>
                       </div>
@@ -521,7 +502,7 @@ const AdminDashboard: React.FC = () => {
                 )}
                 <div className="mt-4 pt-4 border-t border-gray-200">
                   <Link
-                    href="/admin/approval"
+                    href="/admin/approval/experts"
                     className="w-full text-blue-600 hover:text-blue-800 text-center text-sm font-medium transition-colors block"
                   >
                     전체 승인 관리 →
@@ -533,10 +514,17 @@ const AdminDashboard: React.FC = () => {
 
           {/* 권한별 빠른 작업 버튼들 */}
           <div className="bg-white rounded-lg shadow-sm p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-              <span className="mr-2">⚡</span>
-              빠른 작업
-            </h2>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold text-gray-900 flex items-center">
+                <span className="mr-2">⚡</span>
+                빠른 작업
+              </h2>
+              {dashboardStats && (
+                <div className="text-sm text-gray-500">
+                  마지막 업데이트: {new Date(dashboardStats.generatedAt).toLocaleString('ko-KR')}
+                </div>
+              )}
+            </div>
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
               {/* 전문가 승인 - 모든 관리자 */}
               <Link

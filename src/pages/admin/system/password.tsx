@@ -1,6 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import Sidebar from '@/components/Layout/Sidebar';
+import { useStore } from '@/store/useStore';
+import passwordService, { PasswordInfo } from '@/services/passwordService';
 
 interface PasswordRequirement {
   key: string;
@@ -11,6 +13,7 @@ interface PasswordRequirement {
 
 const PasswordChangePage: React.FC = () => {
   const router = useRouter();
+  const { user } = useStore();
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -18,67 +21,33 @@ const PasswordChangePage: React.FC = () => {
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [passwordInfo, setPasswordInfo] = useState<PasswordInfo | null>(null);
 
-  // 현재 관리자 정보 (실제로는 context나 API에서 가져와야 함)
-  const currentAdmin = {
-    id: 'admin_001',
-    name: '김관리자',
-    email: 'admin@expertlink.com',
-    role: '최고 관리자',
-    lastPasswordChange: '2024-05-15T09:30:00',
-    loginCount: 245,
-    lastLogin: '2024-08-12T15:30:00'
-  };
-
-  // 비밀번호 요구사항
-  const passwordRequirements: PasswordRequirement[] = [
-    {
-      key: 'length',
-      description: '8자 이상',
-      regex: /.{8,}/,
-      met: newPassword.length >= 8
-    },
-    {
-      key: 'uppercase',
-      description: '대문자 1개 이상',
-      regex: /[A-Z]/,
-      met: /[A-Z]/.test(newPassword)
-    },
-    {
-      key: 'lowercase',
-      description: '소문자 1개 이상',
-      regex: /[a-z]/,
-      met: /[a-z]/.test(newPassword)
-    },
-    {
-      key: 'number',
-      description: '숫자 1개 이상',
-      regex: /[0-9]/,
-      met: /[0-9]/.test(newPassword)
-    },
-    {
-      key: 'special',
-      description: '특수문자 1개 이상',
-      regex: /[!@#$%^&*(),.?":{}|<>]/,
-      met: /[!@#$%^&*(),.?":{}|<>]/.test(newPassword)
-    }
-  ];
-
-  const isPasswordValid = passwordRequirements.every(req => req.met);
+  // 비밀번호 검증 및 강도 계산
+  const passwordValidation = passwordService.validatePasswordStrength(newPassword);
+  const isPasswordValid = passwordService.isPasswordValid(newPassword);
   const isFormValid = currentPassword && newPassword && confirmPassword && 
                      isPasswordValid && newPassword === confirmPassword;
 
-  const calculatePasswordStrength = () => {
-    const metRequirements = passwordRequirements.filter(req => req.met).length;
-    const strengthPercentage = (metRequirements / passwordRequirements.length) * 100;
-    
-    if (strengthPercentage >= 80) return { level: 'strong', text: '강함', color: 'bg-accent' };
-    if (strengthPercentage >= 60) return { level: 'medium', text: '보통', color: 'bg-secondary-400' };
-    if (strengthPercentage >= 40) return { level: 'weak', text: '약함', color: 'bg-error' };
-    return { level: 'very-weak', text: '매우 약함', color: 'bg-background-400' };
+  // 비밀번호 정보 로드
+  const loadPasswordInfo = async () => {
+    try {
+      const info = await passwordService.getPasswordInfo();
+      setPasswordInfo(info);
+      setError(null);
+    } catch (err: any) {
+      console.error('비밀번호 정보 로드 실패:', err);
+      setError('비밀번호 정보를 불러오는데 실패했습니다.');
+    }
   };
 
-  const passwordStrength = calculatePasswordStrength();
+  // 컴포넌트 마운트 시 정보 로드
+  useEffect(() => {
+    if (user) {
+      loadPasswordInfo();
+    }
+  }, [user]);
 
   const handlePasswordChange = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -86,46 +55,57 @@ const PasswordChangePage: React.FC = () => {
     if (!isFormValid) return;
     
     setIsLoading(true);
+    setError(null);
     
     try {
-      // 실제 API 호출 시뮬레이션
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      const result = await passwordService.changePassword({
+        currentPassword,
+        newPassword
+      });
       
       // 성공 처리
-      alert('비밀번호가 성공적으로 변경되었습니다.');
+      alert(result.message);
       
       // 폼 초기화
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
       
-    } catch (error) {
-      alert('비밀번호 변경 중 오류가 발생했습니다.');
+      // 비밀번호 정보 새로고침
+      await loadPasswordInfo();
+      
+    } catch (err: any) {
+      const errorMessage = err.response?.data?.message || '비밀번호 변경 중 오류가 발생했습니다.';
+      setError(errorMessage);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleString('ko-KR');
-  };
+  // 권한 체크 및 로딩 상태
+  if (!user) {
+    return <div className="p-4">로딩 중...</div>;
+  }
 
-  const getDaysSinceLastChange = () => {
-    const lastChange = new Date(currentAdmin.lastPasswordChange);
-    const now = new Date();
-    const diffTime = Math.abs(now.getTime() - lastChange.getTime());
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    return diffDays;
-  };
-
-  const daysSinceLastChange = getDaysSinceLastChange();
-  const isPasswordExpiringSoon = daysSinceLastChange > 60; // 60일 이후 경고
+  if (!passwordInfo) {
+    return (
+      <div className="flex h-screen bg-background-50">
+        <Sidebar userType={user.userType || 'general'} />
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <p>정보를 불러오는 중...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-screen bg-background-50">
       {/* 사이드바 */}
       <Sidebar 
-        userType="super_admin" 
+        userType={user.userType || 'general'} 
       />
 
       {/* 메인 콘텐츠 */}
@@ -146,9 +126,9 @@ const PasswordChangePage: React.FC = () => {
               {/* 프로필 */}
               <div className="flex items-center space-x-2">
                 <div className="w-8 h-8 bg-secondary-400 rounded-full flex items-center justify-center">
-                  <span className="text-white text-sm font-bold">관</span>
+                  <span className="text-white text-sm font-bold">{passwordInfo.name.charAt(0)}</span>
                 </div>
-                <span className="text-body text-secondary-600">관리자</span>
+                <span className="text-body text-secondary-600">{passwordInfo.name}</span>
               </div>
             </div>
           </div>
@@ -167,26 +147,28 @@ const PasswordChangePage: React.FC = () => {
                   <div className="space-y-4">
                     <div className="flex items-center space-x-3">
                       <div className="w-12 h-12 bg-secondary-400 rounded-full flex items-center justify-center">
-                        <span className="text-white text-lg font-bold">{currentAdmin.name.charAt(0)}</span>
+                        <span className="text-white text-lg font-bold">{passwordInfo.name.charAt(0)}</span>
                       </div>
                       <div>
-                        <div className="text-body font-medium text-secondary-700">{currentAdmin.name}</div>
-                        <div className="text-caption text-secondary-500">{currentAdmin.email}</div>
+                        <div className="text-body font-medium text-secondary-700">{passwordInfo.name}</div>
+                        <div className="text-caption text-secondary-500">{passwordInfo.email}</div>
                       </div>
                     </div>
                     
                     <div className="pt-4 border-t border-background-200 space-y-3">
                       <div className="flex justify-between">
                         <span className="text-caption text-secondary-500">역할</span>
-                        <span className="text-caption text-secondary-700">{currentAdmin.role}</span>
+                        <span className="text-caption text-secondary-700">{passwordInfo.role}</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-caption text-secondary-500">총 로그인</span>
-                        <span className="text-caption text-secondary-700">{currentAdmin.loginCount}회</span>
+                        <span className="text-caption text-secondary-700">{passwordInfo.loginCount}회</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-caption text-secondary-500">최종 로그인</span>
-                        <span className="text-caption text-secondary-700">{formatDate(currentAdmin.lastLogin)}</span>
+                        <span className="text-caption text-secondary-700">
+                          {passwordInfo.lastLogin ? passwordService.formatDate(passwordInfo.lastLogin) : '없음'}
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -199,24 +181,26 @@ const PasswordChangePage: React.FC = () => {
                   <div className="space-y-4">
                     <div>
                       <div className="text-caption text-secondary-500 mb-1">최근 변경일</div>
-                      <div className="text-body text-secondary-700">{formatDate(currentAdmin.lastPasswordChange)}</div>
+                      <div className="text-body text-secondary-700">
+                        {passwordService.formatDate(passwordInfo.lastPasswordChange)}
+                      </div>
                     </div>
                     
                     <div>
                       <div className="text-caption text-secondary-500 mb-1">경과 시간</div>
-                      <div className={`text-body ${isPasswordExpiringSoon ? 'text-error' : 'text-secondary-700'}`}>
-                        {daysSinceLastChange}일 전
+                      <div className={`text-body ${passwordInfo.isPasswordExpiringSoon ? 'text-error' : 'text-secondary-700'}`}>
+                        {passwordInfo.daysSinceLastChange}일 전
                       </div>
-                      {isPasswordExpiringSoon && (
+                      {passwordInfo.isPasswordExpiringSoon && (
                         <div className="text-xs text-error mt-1">
                           ⚠️ 비밀번호 변경을 권장합니다
                         </div>
                       )}
                     </div>
 
-                    <div className={`p-3 rounded-lg ${isPasswordExpiringSoon ? 'bg-error-50' : 'bg-accent-50'}`}>
-                      <div className={`text-caption ${isPasswordExpiringSoon ? 'text-error-700' : 'text-accent-700'}`}>
-                        {isPasswordExpiringSoon 
+                    <div className={`p-3 rounded-lg ${passwordInfo.isPasswordExpiringSoon ? 'bg-error-50' : 'bg-accent-50'}`}>
+                      <div className={`text-caption ${passwordInfo.isPasswordExpiringSoon ? 'text-error-700' : 'text-accent-700'}`}>
+                        {passwordInfo.isPasswordExpiringSoon 
                           ? '보안을 위해 비밀번호를 변경해주세요'
                           : '비밀번호가 안전하게 관리되고 있습니다'
                         }
@@ -230,6 +214,13 @@ const PasswordChangePage: React.FC = () => {
               <div className="lg:col-span-2">
                 <div className="bg-white rounded-custom shadow-soft p-6">
                   <h2 className="text-h4 font-semibold text-secondary mb-6">새 비밀번호 설정</h2>
+                  
+                  {/* 에러 메시지 */}
+                  {error && (
+                    <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-6">
+                      {error}
+                    </div>
+                  )}
                   
                   <form onSubmit={handlePasswordChange} className="space-y-6">
                     {/* 현재 비밀번호 */}
@@ -285,16 +276,17 @@ const PasswordChangePage: React.FC = () => {
                           <div className="flex items-center justify-between mb-2">
                             <span className="text-caption text-secondary-500">비밀번호 강도</span>
                             <span className={`text-caption font-medium ${
-                              passwordStrength.level === 'strong' ? 'text-accent' :
-                              passwordStrength.level === 'medium' ? 'text-secondary-400' : 'text-error'
+                              passwordValidation.level === 'strong' ? 'text-green-600' :
+                              passwordValidation.level === 'medium' ? 'text-yellow-600' : 
+                              passwordValidation.level === 'weak' ? 'text-red-600' : 'text-gray-600'
                             }`}>
-                              {passwordStrength.text}
+                              {passwordValidation.text}
                             </span>
                           </div>
                           <div className="w-full bg-background-200 rounded-full h-2">
                             <div 
-                              className={`h-2 rounded-full transition-all ${passwordStrength.color}`}
-                              style={{ width: `${(passwordRequirements.filter(req => req.met).length / passwordRequirements.length) * 100}%` }}
+                              className={`h-2 rounded-full transition-all ${passwordValidation.color}`}
+                              style={{ width: `${(passwordValidation.requirements.filter(req => req.met).length / passwordValidation.requirements.length) * 100}%` }}
                             ></div>
                           </div>
                         </div>
@@ -339,11 +331,11 @@ const PasswordChangePage: React.FC = () => {
                     <div className="bg-background-50 p-4 rounded-lg">
                       <h4 className="text-caption font-medium text-secondary-700 mb-3">비밀번호 요구사항</h4>
                       <div className="space-y-2">
-                        {passwordRequirements.map((requirement) => (
+                        {passwordValidation.requirements.map((requirement) => (
                           <div key={requirement.key} className="flex items-center space-x-2">
                             <span className={`text-sm ${requirement.met ? '✅' : '❌'}`}></span>
                             <span className={`text-caption ${
-                              requirement.met ? 'text-accent' : 'text-secondary-500'
+                              requirement.met ? 'text-green-600' : 'text-secondary-500'
                             }`}>
                               {requirement.description}
                             </span>

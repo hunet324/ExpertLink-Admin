@@ -257,23 +257,23 @@ const Sidebar: React.FC<SidebarProps> = ({ userType }) => {
         { id: 'password-change', label: '비밀번호 변경', icon: '🔑', path: '/admin/system/password', minLevel: 'staff' } // 🎯 통일
       ]
     },
-    // 🎯 수퍼관리자 전용 기능 (3단계 확장)
-    {
-      id: 'super-admin',
-      label: '최고 관리자',
-      icon: '👑',
-      path: '/admin/super-admin',
-      minLevel: 'super_admin',
-      children: [
-        { id: 'global-dashboard', label: '전체 시스템 현황', icon: '🌐', path: '/admin/super-admin/global-dashboard', minLevel: 'super_admin' },
-        { id: 'admin-accounts', label: '관리자 계정 관리', icon: '👤', path: '/admin/super-admin/admin-accounts', minLevel: 'super_admin' },
-        { id: 'global-settings', label: '글로벌 시스템 설정', icon: '🔧', path: '/admin/super-admin/global-settings', minLevel: 'super_admin' },
-        { id: 'security-policy', label: '보안 정책 관리', icon: '🔒', path: '/admin/super-admin/security-policy', minLevel: 'super_admin' },
-        { id: 'system-monitoring', label: '시스템 모니터링', icon: '📈', path: '/admin/super-admin/system-monitoring', minLevel: 'super_admin' },
-        { id: 'backup-restore', label: '백업 및 복원', icon: '💾', path: '/admin/super-admin/backup-restore', minLevel: 'super_admin' },
-        { id: 'audit-trails', label: '감사 추적', icon: '🔍', path: '/admin/super-admin/audit-trails', minLevel: 'super_admin' }
-      ]
-    }
+    // 🎯 수퍼관리자 전용 기능 (3단계 확장) // 임시주석 지금당장 필요없음.
+    // {
+    //   id: 'super-admin',
+    //   label: '최고 관리자',
+    //   icon: '👑',
+    //   path: '/admin/super-admin',
+    //   minLevel: 'super_admin',
+    //   children: [
+    //     { id: 'global-dashboard', label: '전체 시스템 현황', icon: '🌐', path: '/admin/super-admin/global-dashboard', minLevel: 'super_admin' },
+    //     { id: 'admin-accounts', label: '관리자 계정 관리', icon: '👤', path: '/admin/super-admin/admin-accounts', minLevel: 'super_admin' },
+    //     { id: 'global-settings', label: '글로벌 시스템 설정', icon: '🔧', path: '/admin/super-admin/global-settings', minLevel: 'super_admin' },
+    //     { id: 'security-policy', label: '보안 정책 관리', icon: '🔒', path: '/admin/super-admin/security-policy', minLevel: 'super_admin' },
+    //     { id: 'system-monitoring', label: '시스템 모니터링', icon: '📈', path: '/admin/super-admin/system-monitoring', minLevel: 'super_admin' },
+    //     { id: 'backup-restore', label: '백업 및 복원', icon: '💾', path: '/admin/super-admin/backup-restore', minLevel: 'super_admin' },
+    //     { id: 'audit-trails', label: '감사 추적', icon: '🔍', path: '/admin/super-admin/audit-trails', minLevel: 'super_admin' }
+    //   ]
+    // }
   ];
 
 

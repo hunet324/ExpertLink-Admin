@@ -1,6 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/router';
 import Sidebar from '@/components/Layout/Sidebar';
+import { AdminApiService } from '@/services/adminApi';
+import { useStore } from '@/store/useStore';
+import { getUserType } from '@/utils/permissions';
+import { withAdminOnly } from '@/components/withPermission';
+import PermissionGuard from '@/components/PermissionGuard';
 
 interface Expert {
   id: string;
@@ -19,7 +24,7 @@ interface Expert {
     institution: string;
     position: string;
     period: string;
-  }[];
+  }[] | any[];
   bio: string;
   status: 'active' | 'inactive' | 'suspended';
   joinedAt: string;
@@ -42,120 +47,45 @@ interface Expert {
 
 const ExpertSystemPage: React.FC = () => {
   const router = useRouter();
+  const { user, isLoading: userLoading } = useStore();
+  const userType = getUserType(user);
+  const successTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive' | 'suspended'>('all');
   const [selectedExpert, setSelectedExpert] = useState<Expert | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [actionLoading, setActionLoading] = useState<string | null>(null); // 버튼 액션 로딩 상태
+  const [successMessage, setSuccessMessage] = useState<string>(''); // 성공 메시지
 
-  // 승인된 전문가 샘플 데이터
-  const [experts, setExperts] = useState<Expert[]>([
-    {
-      id: 'expert_001',
-      name: '김상담사',
-      email: 'kim.counselor@example.com',
-      phone: '010-1111-2222',
-      birthDate: '1985-03-15',
-      gender: 'female',
-      licenseNumber: '임상심리사 1급 제2024-001호',
-      licenseType: '임상심리사 1급',
-      specializations: ['우울/불안', '대인관계', '학습상담', 'ADHD'],
-      experience: 8,
-      education: [
-        '서울대학교 심리학과 학사',
-        '연세대학교 임상심리학 석사',
-        '고려대학교 임상심리학 박사'
-      ],
-      certifications: [
-        '임상심리사 1급',
-        '정신건강임상심리사',
-        '학습치료사',
-        'CBT 인증 치료사'
-      ],
-      workHistory: [
-        {
-          institution: '서울대병원 정신건강의학과',
-          position: '임상심리사',
-          period: '2020-2024'
-        },
-        {
-          institution: '강남 심리상담센터',
-          position: '수석 상담사',
-          period: '2016-2020'
-        }
-      ],
-      bio: '안녕하세요. 8년간 임상 현장에서 다양한 내담자들과 함께 성장해온 김상담사입니다.',
-      status: 'active',
-      joinedAt: '2024-08-10T14:30:00',
-      lastLogin: '2024-08-12T09:15:00',
-      consultationCount: 127,
-      rating: 4.8,
-      consultationTypes: {
-        video: true,
-        chat: true,
-        voice: true
-      },
-      rates: {
-        video: 80000,
-        chat: 50000,
-        voice: 60000
-      },
-      totalEarnings: 8640000,
-      clientCount: 45
-    },
-    {
-      id: 'expert_002',
-      name: '이전문가',
-      email: 'lee.expert@example.com',
-      phone: '010-3333-4444',
-      birthDate: '1982-11-05',
-      gender: 'female',
-      licenseNumber: '임상심리사 2급 제2024-003호',
-      licenseType: '임상심리사 2급',
-      specializations: ['트라우마', '정신분석', '게슈탈트'],
-      experience: 12,
-      education: [
-        '고려대 심리학과 학사',
-        '서울대 임상심리학 석사',
-        '연세대 임상심리학 박사'
-      ],
-      certifications: [
-        '임상심리사 2급',
-        '정신분석치료사',
-        '게슈탈트치료사',
-        'EMDR 치료사'
-      ],
-      workHistory: [
-        {
-          institution: '트라우마치료센터',
-          position: '센터장',
-          period: '2018-2024'
-        },
-        {
-          institution: '삼성의료원 정신건강의학과',
-          position: '임상심리사',
-          period: '2012-2018'
-        }
-      ],
-      bio: '트라우마 전문 치료사로서 12년간 다양한 임상 경험을 쌓아왔습니다.',
-      status: 'active',
-      joinedAt: '2024-08-08T16:45:00',
-      lastLogin: '2024-08-12T08:30:00',
-      consultationCount: 234,
-      rating: 4.9,
-      consultationTypes: {
-        video: true,
-        chat: false,
-        voice: true
-      },
-      rates: {
-        video: 100000,
-        chat: 0,
-        voice: 80000
-      },
-      totalEarnings: 18720000,
-      clientCount: 78
+  // 전문가 목록 상태
+  const [allExperts, setAllExperts] = useState<Expert[]>([]); // 전체 데이터
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
+
+  // 전문가 목록 데이터 로드
+  const fetchExperts = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      const expertsData = await AdminApiService.getAllExperts();
+      setAllExperts(expertsData);
+    } catch (err: any) {
+      console.error('전문가 목록 조회 실패:', err);
+      setError(err.message || '전문가 목록을 불러오는데 실패했습니다.');
+    } finally {
+      setLoading(false);
     }
-  ]);
+  };
+
+  useEffect(() => {
+    if (userType) {
+      fetchExperts();
+    }
+  }, [userType]);
 
   // URL 파라미터에서 검색어 가져오기
   useEffect(() => {
@@ -182,19 +112,49 @@ const ExpertSystemPage: React.FC = () => {
     }
   };
 
-  const filteredExperts = experts.filter(expert => {
-    const matchesSearch = expert.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         expert.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         expert.specializations.some(spec => spec.toLowerCase().includes(searchQuery.toLowerCase()));
+  // 안전한 데이터 검증 함수들 (필터링 전에 선언)
+  const safeString = (value: any, fallback: string = '정보 없음'): string => {
+    return value && typeof value === 'string' && value.trim() ? value : fallback;
+  };
+
+  const safeNumber = (value: any, fallback: number = 0): number => {
+    const num = Number(value);
+    return !isNaN(num) && isFinite(num) ? num : fallback;
+  };
+
+  const safeArray = (value: any): any[] => {
+    return Array.isArray(value) ? value : [];
+  };
+
+  // 필터링된 전체 데이터
+  const filteredExperts = allExperts.filter(expert => {
+    if (!expert) return false;
+    
+    const name = safeString(expert.name, '').toLowerCase();
+    const email = safeString(expert.email, '').toLowerCase();
+    const specializations = safeArray(expert.specializations);
+    const searchLower = searchQuery.toLowerCase();
+    
+    const matchesSearch = name.includes(searchLower) ||
+                         email.includes(searchLower) ||
+                         specializations.some(spec => safeString(spec, '').toLowerCase().includes(searchLower));
     
     const matchesStatus = statusFilter === 'all' || expert.status === statusFilter;
     
     return matchesSearch && matchesStatus;
   });
 
+  // 페이지네이션 적용 (필터링된 데이터 기준)
+  const totalFilteredExperts = filteredExperts.length;
+  const totalPages = Math.ceil(totalFilteredExperts / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedExperts = filteredExperts.slice(startIndex, endIndex);
+
+  // 상태별 카운트 (전체 데이터 기준)
   const getFilterCount = (status: 'all' | 'active' | 'inactive' | 'suspended') => {
-    if (status === 'all') return experts.length;
-    return experts.filter(expert => expert.status === status).length;
+    if (status === 'all') return allExperts.length;
+    return allExperts.filter(expert => expert && expert.status === status).length;
   };
 
   const formatDate = (dateString: string) => {
@@ -206,6 +166,7 @@ const ExpertSystemPage: React.FC = () => {
   };
 
   const formatCurrency = (amount: number) => {
+    if (!amount || isNaN(amount)) return '0원';
     return `${amount.toLocaleString()}원`;
   };
 
@@ -214,19 +175,81 @@ const ExpertSystemPage: React.FC = () => {
     setShowDetailModal(true);
   };
 
-  const handleStatusChange = (expertId: string, newStatus: 'active' | 'inactive' | 'suspended') => {
-    setExperts(prev => prev.map(expert => 
-      expert.id === expertId 
-        ? { ...expert, status: newStatus }
-        : expert
-    ));
+  const handleStatusChange = async (expertId: string, newStatus: 'active' | 'inactive' | 'suspended') => {
+    try {
+      setActionLoading(expertId + '_' + newStatus);
+      setError('');
+      setSuccessMessage('');
+      
+      const result = await AdminApiService.updateExpertStatus(expertId, newStatus);
+      
+      if (result.success) {
+        // 전체 데이터 업데이트
+        setAllExperts(prev => prev.map(expert => 
+          expert.id === expertId 
+            ? { ...expert, status: newStatus }
+            : expert
+        ));
+        setSuccessMessage(result.message);
+        
+        // 기존 타이머가 있으면 제거
+        if (successTimeoutRef.current) {
+          clearTimeout(successTimeoutRef.current);
+        }
+        
+        // 3초 후 성공 메시지 제거
+        successTimeoutRef.current = setTimeout(() => setSuccessMessage(''), 3000);
+      } else {
+        setError(result.message);
+      }
+    } catch (err: any) {
+      console.error('상태 변경 실패:', err);
+      setError(err.message || '상태 변경에 실패했습니다.');
+    } finally {
+      setActionLoading(null);
+    }
   };
+
+  const refreshExperts = () => {
+    fetchExperts();
+  };
+
+  // 페이지 변경 함수
+  const handlePageChange = (newPage: number) => {
+    setCurrentPage(newPage);
+  };
+
+  // 검색이나 필터 변경 시 페이지를 1로 리셋
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, statusFilter]);
+
+  // 컴포넌트 언마운트 시 타이머 정리
+  useEffect(() => {
+    return () => {
+      if (successTimeoutRef.current) {
+        clearTimeout(successTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  // 로딩 중이거나 사용자 정보가 없으면 로딩 표시
+  if (userLoading || !userType) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <div className="animate-spin h-12 w-12 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-4"></div>
+          <p className="text-gray-600">사용자 정보를 확인하는 중...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-screen bg-background-50">
       {/* 사이드바 */}
       <Sidebar 
-        userType="super_admin" 
+        userType={userType} 
       />
 
       {/* 메인 콘텐츠 */}
@@ -262,12 +285,22 @@ const ExpertSystemPage: React.FC = () => {
                 </div>
               </div>
 
+              {/* 새로고침 버튼 */}
+              <button
+                onClick={refreshExperts}
+                disabled={loading}
+                className="bg-blue-500 hover:bg-blue-600 disabled:bg-gray-400 text-white px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
+              >
+                <span className={loading ? 'animate-spin' : ''}>🔄</span>
+                {loading ? '로딩 중...' : '새로고침'}
+              </button>
+              
               {/* 프로필 */}
               <div className="flex items-center space-x-2">
                 <div className="w-8 h-8 bg-secondary-400 rounded-full flex items-center justify-center">
-                  <span className="text-white text-sm font-bold">관</span>
+                  <span className="text-white text-sm font-bold">{user?.name?.charAt(0) || '관'}</span>
                 </div>
-                <span className="text-body text-secondary-600">관리자</span>
+                <span className="text-body text-secondary-600">{user?.name || '관리자'}</span>
               </div>
             </div>
           </div>
@@ -275,6 +308,47 @@ const ExpertSystemPage: React.FC = () => {
 
         {/* 메인 콘텐츠 영역 */}
         <main className="flex-1 overflow-y-auto p-6">
+          {/* 성공 메시지 */}
+          {successMessage && (
+            <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
+              <div className="flex items-center">
+                <span className="text-green-500 mr-2">✅</span>
+                <p className="text-green-700">{successMessage}</p>
+              </div>
+            </div>
+          )}
+          
+          {/* 에러 메시지 */}
+          {error && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center">
+                  <span className="text-red-500 mr-2">⚠️</span>
+                  <p className="text-red-700">{error}</p>
+                </div>
+                <button
+                  onClick={() => setError('')}
+                  className="text-red-600 hover:text-red-800 text-sm font-medium"
+                >
+                  닫기
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* 로딩 상태 */}
+          {loading && (
+            <div className="flex items-center justify-center h-64">
+              <div className="flex flex-col items-center space-y-4">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-500"></div>
+                <p className="text-secondary-400">전문가 목록을 불러오는 중...</p>
+              </div>
+            </div>
+          )}
+
+          {/* 데이터가 있을 때만 표시 */}
+          {!loading && (
+            <>
           {/* 검색 및 필터 */}
           <div className="mb-6 space-y-4">
             {/* 검색바 */}
@@ -331,8 +405,8 @@ const ExpertSystemPage: React.FC = () => {
 
           {/* 전문가 목록 */}
           <div className="space-y-4">
-            {filteredExperts.length > 0 ? (
-              filteredExperts.map((expert) => (
+            {paginatedExperts.length > 0 ? (
+              paginatedExperts.map((expert) => (
                 <div key={expert.id} className="bg-white rounded-custom shadow-soft p-6">
                   <div className="flex items-start justify-between mb-4">
                     <div className="flex items-center space-x-4">
@@ -341,20 +415,20 @@ const ExpertSystemPage: React.FC = () => {
                       </div>
                       <div>
                         <h3 className="text-h4 font-semibold text-secondary flex items-center space-x-2">
-                          <span>{expert.name}</span>
+                          <span>{safeString(expert.name, '이름 없음')}</span>
                           <span className="bg-background-200 text-secondary-600 px-3 py-1 rounded-full text-caption">
-                            {expert.licenseType}
+                            {safeString(expert.licenseType, '자격증 없음')}
                           </span>
                           <span className={`px-3 py-1 rounded-full text-caption font-medium ${getStatusColor(expert.status)}`}>
                             {getStatusText(expert.status)}
                           </span>
                         </h3>
-                        <p className="text-caption text-secondary-400 mt-1">{expert.email}</p>
+                        <p className="text-caption text-secondary-400 mt-1">{safeString(expert.email, '이메일 없음')}</p>
                       </div>
                     </div>
                     <div className="text-right">
-                      <div className="text-caption text-secondary-400">가입일: {formatDate(expert.joinedAt)}</div>
-                      <div className="text-caption text-secondary-400 mt-1">최종 접속: {formatDateTime(expert.lastLogin)}</div>
+                      <div className="text-caption text-secondary-400">가입일: {expert.joinedAt ? formatDate(expert.joinedAt) : '정보 없음'}</div>
+                      <div className="text-caption text-secondary-400 mt-1">최종 접속: {expert.lastLogin ? formatDateTime(expert.lastLogin) : '접속 내역 없음'}</div>
                     </div>
                   </div>
 
@@ -365,15 +439,15 @@ const ExpertSystemPage: React.FC = () => {
                       <div className="space-y-1 text-caption">
                         <div className="flex justify-between">
                           <span>상담 횟수:</span>
-                          <span className="font-medium">{expert.consultationCount}회</span>
+                          <span className="font-medium">{safeNumber(expert.consultationCount)}회</span>
                         </div>
                         <div className="flex justify-between">
                           <span>내담자 수:</span>
-                          <span className="font-medium">{expert.clientCount}명</span>
+                          <span className="font-medium">{safeNumber(expert.clientCount)}명</span>
                         </div>
                         <div className="flex justify-between">
                           <span>평점:</span>
-                          <span className="font-medium text-accent">⭐ {expert.rating}</span>
+                          <span className="font-medium text-accent">⭐ {safeNumber(expert.rating, 0).toFixed(1)}</span>
                         </div>
                       </div>
                     </div>
@@ -384,10 +458,10 @@ const ExpertSystemPage: React.FC = () => {
                       <div className="space-y-1 text-caption">
                         <div className="flex justify-between">
                           <span>총 수익:</span>
-                          <span className="font-medium text-primary">{formatCurrency(expert.totalEarnings)}</span>
+                          <span className="font-medium text-primary">{formatCurrency(safeNumber(expert.totalEarnings))}</span>
                         </div>
                         <div className="text-xs text-secondary-400">
-                          평균: {formatCurrency(Math.round(expert.totalEarnings / expert.consultationCount))} / 건
+                          평균: {safeNumber(expert.consultationCount) > 0 ? formatCurrency(Math.round(safeNumber(expert.totalEarnings) / safeNumber(expert.consultationCount))) : '0원'} / 건
                         </div>
                       </div>
                     </div>
@@ -396,15 +470,21 @@ const ExpertSystemPage: React.FC = () => {
                     <div className="space-y-2">
                       <h4 className="text-caption font-semibold text-secondary-600">전문분야</h4>
                       <div className="flex flex-wrap gap-1">
-                        {expert.specializations.slice(0, 3).map((spec, index) => (
-                          <span key={index} className="bg-primary-100 text-primary-700 px-2 py-1 rounded text-xs">
-                            {spec}
-                          </span>
-                        ))}
-                        {expert.specializations.length > 3 && (
-                          <span className="bg-background-200 text-secondary-500 px-2 py-1 rounded text-xs">
-                            +{expert.specializations.length - 3}
-                          </span>
+                        {safeArray(expert.specializations).length > 0 ? (
+                          <>
+                            {safeArray(expert.specializations).slice(0, 3).map((spec, index) => (
+                              <span key={index} className="bg-primary-100 text-primary-700 px-2 py-1 rounded text-xs">
+                                {safeString(spec, '전문분야')}
+                              </span>
+                            ))}
+                            {safeArray(expert.specializations).length > 3 && (
+                              <span className="bg-background-200 text-secondary-500 px-2 py-1 rounded text-xs">
+                                +{safeArray(expert.specializations).length - 3}
+                              </span>
+                            )}
+                          </>
+                        ) : (
+                          <span className="text-xs text-secondary-400">전문분야 없음</span>
                         )}
                       </div>
                     </div>
@@ -456,45 +536,50 @@ const ExpertSystemPage: React.FC = () => {
                     <div className="flex space-x-2">
                       {expert.status === 'active' && (
                         <>
-                          <button
-                            onClick={() => handleStatusChange(expert.id, 'inactive')}
-                            className="bg-secondary-400 text-white px-4 py-2 rounded-lg text-caption font-medium hover:bg-secondary-500 transition-colors"
-                          >
-                            비활성화
-                          </button>
-                          <button
-                            onClick={() => handleStatusChange(expert.id, 'suspended')}
-                            className="bg-error text-white px-4 py-2 rounded-lg text-caption font-medium hover:bg-error-600 transition-colors"
-                          >
-                            정지
-                          </button>
+                          <PermissionGuard minLevel="center_manager">
+                            <button
+                              onClick={() => handleStatusChange(expert.id, 'inactive')}
+                              disabled={actionLoading === expert.id + '_inactive'}
+                              className="bg-secondary-400 text-white px-4 py-2 rounded-lg text-caption font-medium hover:bg-secondary-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              {actionLoading === expert.id + '_inactive' ? '처리중...' : '비활성화'}
+                            </button>
+                          </PermissionGuard>
+                          <PermissionGuard minLevel="regional_manager">
+                            <button
+                              onClick={() => handleStatusChange(expert.id, 'suspended')}
+                              disabled={actionLoading === expert.id + '_suspended'}
+                              className="bg-error text-white px-4 py-2 rounded-lg text-caption font-medium hover:bg-error-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              {actionLoading === expert.id + '_suspended' ? '처리중...' : '정지'}
+                            </button>
+                          </PermissionGuard>
                         </>
                       )}
                       
                       {expert.status === 'inactive' && (
-                        <button
-                          onClick={() => handleStatusChange(expert.id, 'active')}
-                          className="bg-accent text-white px-4 py-2 rounded-lg text-caption font-medium hover:bg-accent-600 transition-colors"
-                        >
-                          활성화
-                        </button>
+                        <PermissionGuard minLevel="center_manager">
+                          <button
+                            onClick={() => handleStatusChange(expert.id, 'active')}
+                            disabled={actionLoading === expert.id + '_active'}
+                            className="bg-accent text-white px-4 py-2 rounded-lg text-caption font-medium hover:bg-accent-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {actionLoading === expert.id + '_active' ? '처리중...' : '활성화'}
+                          </button>
+                        </PermissionGuard>
                       )}
 
                       {expert.status === 'suspended' && (
-                        <button
-                          onClick={() => handleStatusChange(expert.id, 'active')}
-                          className="bg-accent text-white px-4 py-2 rounded-lg text-caption font-medium hover:bg-accent-600 transition-colors"
-                        >
-                          정지해제
-                        </button>
+                        <PermissionGuard minLevel="regional_manager">
+                          <button
+                            onClick={() => handleStatusChange(expert.id, 'active')}
+                            disabled={actionLoading === expert.id + '_active'}
+                            className="bg-accent text-white px-4 py-2 rounded-lg text-caption font-medium hover:bg-accent-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {actionLoading === expert.id + '_active' ? '처리중...' : '정지해제'}
+                          </button>
+                        </PermissionGuard>
                       )}
-                      
-                      <button
-                        onClick={() => router.push(`/admin/system/experts/${expert.id}/edit`)}
-                        className="bg-primary text-white px-4 py-2 rounded-lg text-caption font-medium hover:bg-primary-600 transition-colors"
-                      >
-                        수정
-                      </button>
                     </div>
                   </div>
                 </div>
@@ -511,6 +596,66 @@ const ExpertSystemPage: React.FC = () => {
               </div>
             )}
           </div>
+          
+          {/* 페이지네이션 */}
+          {!loading && !error && totalPages > 1 && (
+            <div className="bg-white rounded-custom shadow-soft p-4 mt-6">
+              <div className="flex items-center justify-between">
+                <div className="text-sm text-secondary-500">
+                  총 {totalFilteredExperts}명의 전문가 중 {((currentPage - 1) * itemsPerPage) + 1}-{Math.min(currentPage * itemsPerPage, totalFilteredExperts)}명 표시
+                </div>
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={() => handlePageChange(currentPage - 1)}
+                    disabled={currentPage <= 1 || loading}
+                    className="px-3 py-2 border border-background-300 rounded-lg text-sm font-medium text-secondary-600 hover:bg-background-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    이전
+                  </button>
+                  
+                  <div className="flex items-center space-x-1">
+                    {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                      let pageNum;
+                      if (totalPages <= 5) {
+                        pageNum = i + 1;
+                      } else if (currentPage <= 3) {
+                        pageNum = i + 1;
+                      } else if (currentPage >= totalPages - 2) {
+                        pageNum = totalPages - 4 + i;
+                      } else {
+                        pageNum = currentPage - 2 + i;
+                      }
+                      
+                      return (
+                        <button
+                          key={pageNum}
+                          onClick={() => handlePageChange(pageNum)}
+                          disabled={loading}
+                          className={`px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
+                            currentPage === pageNum
+                              ? 'bg-primary text-white'
+                              : 'text-secondary-600 hover:bg-background-100'
+                          } disabled:cursor-not-allowed`}
+                        >
+                          {pageNum}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  
+                  <button
+                    onClick={() => handlePageChange(currentPage + 1)}
+                    disabled={currentPage >= totalPages || loading}
+                    className="px-3 py-2 border border-background-300 rounded-lg text-sm font-medium text-secondary-600 hover:bg-background-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    다음
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+            </>
+          )}
         </main>
       </div>
 
@@ -536,20 +681,20 @@ const ExpertSystemPage: React.FC = () => {
                   <div className="grid grid-cols-2 gap-4">
                     <div className="bg-background-50 p-3 rounded-lg">
                       <div className="text-caption text-secondary-500">이메일</div>
-                      <div className="text-body text-secondary-700">{selectedExpert.email}</div>
+                      <div className="text-body text-secondary-700">{safeString(selectedExpert.email, '이메일 없음')}</div>
                     </div>
                     <div className="bg-background-50 p-3 rounded-lg">
                       <div className="text-caption text-secondary-500">전화번호</div>
-                      <div className="text-body text-secondary-700">{selectedExpert.phone}</div>
+                      <div className="text-body text-secondary-700">{safeString(selectedExpert.phone, '전화번호 없음')}</div>
                     </div>
                     <div className="bg-background-50 p-3 rounded-lg">
                       <div className="text-caption text-secondary-500">생년월일</div>
-                      <div className="text-body text-secondary-700">{formatDate(selectedExpert.birthDate)}</div>
+                      <div className="text-body text-secondary-700">{selectedExpert.birthDate ? formatDate(selectedExpert.birthDate) : '생년월일 없음'}</div>
                     </div>
                     <div className="bg-background-50 p-3 rounded-lg">
                       <div className="text-caption text-secondary-500">성별</div>
                       <div className="text-body text-secondary-700">
-                        {selectedExpert.gender === 'male' ? '남성' : '여성'}
+                        {selectedExpert.gender === 'male' ? '남성' : selectedExpert.gender === 'female' ? '여성' : '성별 없음'}
                       </div>
                     </div>
                   </div>
@@ -559,12 +704,16 @@ const ExpertSystemPage: React.FC = () => {
                 <div>
                   <h4 className="text-body font-semibold text-secondary mb-2">학력</h4>
                   <ul className="space-y-1">
-                    {selectedExpert.education.map((edu, index) => (
-                      <li key={index} className="text-body text-secondary-700 flex items-center">
-                        <span className="w-2 h-2 bg-primary rounded-full mr-3"></span>
-                        {edu}
-                      </li>
-                    ))}
+                    {safeArray(selectedExpert.education).length > 0 ? (
+                      safeArray(selectedExpert.education).map((edu, index) => (
+                        <li key={index} className="text-body text-secondary-700 flex items-center">
+                          <span className="w-2 h-2 bg-primary rounded-full mr-3"></span>
+                          {safeString(edu)}
+                        </li>
+                      ))
+                    ) : (
+                      <li className="text-body text-secondary-400">학력 정보 없음</li>
+                    )}
                   </ul>
                 </div>
 
@@ -572,11 +721,15 @@ const ExpertSystemPage: React.FC = () => {
                 <div>
                   <h4 className="text-body font-semibold text-secondary mb-2">자격증</h4>
                   <div className="grid grid-cols-2 gap-2">
-                    {selectedExpert.certifications.map((cert, index) => (
-                      <div key={index} className="bg-accent-50 border border-accent-200 rounded-lg p-3">
-                        <span className="text-accent-700 text-body">{cert}</span>
-                      </div>
-                    ))}
+                    {safeArray(selectedExpert.certifications).length > 0 ? (
+                      safeArray(selectedExpert.certifications).map((cert, index) => (
+                        <div key={index} className="bg-accent-50 border border-accent-200 rounded-lg p-3">
+                          <span className="text-accent-700 text-body">{safeString(cert)}</span>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="text-body text-secondary-400">자격증 정보 없음</div>
+                    )}
                   </div>
                 </div>
 
@@ -584,13 +737,17 @@ const ExpertSystemPage: React.FC = () => {
                 <div>
                   <h4 className="text-body font-semibold text-secondary mb-2">경력 사항</h4>
                   <div className="space-y-3">
-                    {selectedExpert.workHistory.map((work, index) => (
-                      <div key={index} className="border border-background-200 rounded-lg p-4">
-                        <div className="text-body font-medium text-secondary-700">{work.institution}</div>
-                        <div className="text-caption text-secondary-500">{work.position}</div>
-                        <div className="text-caption text-secondary-400">{work.period}</div>
-                      </div>
-                    ))}
+                    {safeArray(selectedExpert.workHistory).length > 0 ? (
+                      safeArray(selectedExpert.workHistory).map((work, index) => (
+                        <div key={index} className="border border-background-200 rounded-lg p-4">
+                          <div className="text-body font-medium text-secondary-700">{safeString(work.institution, '기관명 없음')}</div>
+                          <div className="text-caption text-secondary-500">{safeString(work.position, '직책 없음')}</div>
+                          <div className="text-caption text-secondary-400">{safeString(work.period, '기간 없음')}</div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="text-body text-secondary-400">경력 사항 없음</div>
+                    )}
                   </div>
                 </div>
 
@@ -599,7 +756,7 @@ const ExpertSystemPage: React.FC = () => {
                   <h4 className="text-body font-semibold text-secondary mb-2">소개글</h4>
                   <div className="bg-background-50 p-4 rounded-lg">
                     <p className="text-body text-secondary-700 leading-relaxed whitespace-pre-wrap">
-                      {selectedExpert.bio}
+                      {safeString(selectedExpert.bio, '소개글이 작성되지 않았습니다.')}
                     </p>
                   </div>
                 </div>
@@ -621,4 +778,4 @@ const ExpertSystemPage: React.FC = () => {
   );
 };
 
-export default ExpertSystemPage;
+export default withAdminOnly(ExpertSystemPage, false);

@@ -66,6 +66,7 @@ const AllUsersPage: React.FC = () => {
       console.log('사용자 목록 API 응답:', response);
       
       // API 응답을 User 인터페이스로 변환 (서버에서 이미 camelCase로 변환되어 온다)
+      console.log('🔍 API 응답 사용자 데이터 샘플:', response.users[0]);
       const transformedUsers: User[] = response.users.map(user => ({
         ...user,
         joinedAt: user.createdAt,
@@ -75,7 +76,7 @@ const AllUsersPage: React.FC = () => {
         loginCount: user.loginCount || 0,
         totalSessions: user.totalSessions || 0,
         totalPayments: user.totalPayments || 0,
-        lastLoginAt: user.lastLoginAt || undefined
+        lastLoginAt: user.lastLoginAt || (user as any).last_login_at || undefined
       }));
 
       // 'admin' 필터의 경우 클라이언트 측에서 필터링
@@ -430,7 +431,12 @@ const AllUsersPage: React.FC = () => {
         phone: formData.get('phone') as string || undefined,
         userType: formData.get('userType') as any,
         status: formData.get('status') as string,
-        centerId: formData.get('centerId') ? parseInt(formData.get('centerId') as string) : undefined,
+        centerId: (() => {
+          const value = formData.get('centerId') as string;
+          if (!value || value === '') return null;
+          const parsed = parseInt(value);
+          return isNaN(parsed) ? null : parsed;
+        })(),
         notes: formData.get('notes') as string || undefined,
       };
 
@@ -645,6 +651,7 @@ const AllUsersPage: React.FC = () => {
                   <tr>
                     <th className="text-left py-3 px-4 font-medium text-secondary-600 text-caption">사용자 정보</th>
                     <th className="text-left py-3 px-4 font-medium text-secondary-600 text-caption">유형</th>
+                    <th className="text-left py-3 px-4 font-medium text-secondary-600 text-caption">소속센터</th>
                     <th className="text-left py-3 px-4 font-medium text-secondary-600 text-caption">상태</th>
                     <th className="text-left py-3 px-4 font-medium text-secondary-600 text-caption">인증</th>
                     <th className="text-left py-3 px-4 font-medium text-secondary-600 text-caption">가입일</th>
@@ -677,6 +684,18 @@ const AllUsersPage: React.FC = () => {
                         <span className={`px-3 py-1 rounded-full text-caption font-medium ${getUserTypeColor(user.userType)}`}>
                           {getUserTypeLabel(user.userType)}
                         </span>
+                      </td>
+                      <td className="py-3 px-4">
+                        <div className="text-caption">
+                          {(user as any).centerName ? (
+                            <>
+                              <div className="text-body font-medium text-secondary-700">{(user as any).centerName}</div>
+                              <div className="text-caption text-secondary-500">{(user as any).centerCode}</div>
+                            </>
+                          ) : (
+                            <span className="text-secondary-400">미배정</span>
+                          )}
+                        </div>
                       </td>
                       <td className="py-3 px-4">
                         <span className={`px-3 py-1 rounded-full text-caption font-medium ${getStatusColor(user.status)}`}>

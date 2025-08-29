@@ -12,6 +12,10 @@ export interface UserResponse {
   centerId?: number;
   supervisorId?: number;
   status: string;
+  
+  // 센터 정보
+  centerName?: string;
+  centerCode?: string;
   createdAt: string;
   updatedAt: string;
   
@@ -140,7 +144,7 @@ export const userService = {
     email: string;
     phone?: string;
     userType: UserType;
-    centerId?: number;
+    centerId?: number | null;
     supervisorId?: number;
     status: string;
     bio?: string;

@@ -391,7 +391,10 @@ const ExpertListPage: React.FC = () => {
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {new Date(expert.createdAt).toLocaleDateString('ko-KR')}
+                        {expert.createdAt ? 
+                          new Date(expert.createdAt).toLocaleDateString('ko-KR') : 
+                          '-'
+                        }
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                         <div className="flex items-center gap-2">
